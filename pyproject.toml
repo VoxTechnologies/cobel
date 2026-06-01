@@ -1,0 +1,18 @@
+[project]
+name = "cobel"
+version = "0.0.1"
+description = "Demand-side existence proof for RFL: a foundation model emits Skill ISA"
+requires-python = ">=3.10"
+# NOTE: `rfl` is intentionally NOT a dependency here — it is not on PyPI yet; it is
+# installed into the venv via `maturin develop` from ../rfl/bindings/python.
+dependencies = ["pyyaml>=6", "jsonschema>=4.20", "anthropic>=0.40"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "maturin>=1.7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["planner", "harness"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
