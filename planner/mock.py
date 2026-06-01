@@ -14,6 +14,11 @@ _REF_DIR = Path(__file__).parents[1] / "reference_skills"
 # task wording vary without breaking the lookup.
 _ROUTES: list[tuple[str, str]] = [
     ("staging tray", "relocate-part.yaml"),
+    ("fuse", "seat-fuse.yaml"),
+    ("buckle", "latch-buckle.yaml"),
+    ("Pour the cup", "pour.yaml"),
+    ("Stack the block", "stack-blocks.yaml"),
+    ("heavy or light", "sort-by-weight.yaml"),
 ]
 
 

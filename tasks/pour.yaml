@@ -1,0 +1,10 @@
+task:
+  instruction: "Pour the cup's contents into the bowl, then set the cup down on the table."
+  success_criteria: "cup contents emptied into the bowl; cup placed on the table"
+scene:
+  objects:
+    - { ref: cup, kind: open_container, est_mass: 2.0 N, features: [rim, handle] }
+    - { ref: bowl, kind: open_container }
+    - { ref: table, kind: surface }
+  frames: [world, table]
+  notes: "cup on the table ~150 mm from the bowl"

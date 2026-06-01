@@ -1,0 +1,9 @@
+task:
+  instruction: "Fasten the seatbelt buckle by snapping the tongue into the catch."
+  success_criteria: "buckle latched; engagement confirmed to hold"
+scene:
+  objects:
+    - { ref: tongue, kind: small_rigid, est_mass: 0.3 N, features: [insert_tab] }
+    - { ref: catch, kind: bistable_mechanism }
+  frames: [world, catch]
+  notes: "tongue held near the catch; snap-fit engagement"

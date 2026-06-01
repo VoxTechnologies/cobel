@@ -1,0 +1,26 @@
+skill: sort-by-weight
+description: >
+  Pinch an item, weigh it in-hand, and place it in the heavy or light bin by a three-valued
+  branch. Group B: sense.weigh + branch + place.put_down are valid Skill ISA but outside the
+  engine's implemented set (beyond_engine at retarget).
+objects:
+  item: { ref: item, estimated_mass: 1.0 N }
+body:
+  sequence:
+    - let: item_t
+      from:
+        sense.locate: { target_ref: item, modality: auto }
+    - grasp.pinch:
+        target: item_t
+        force_budget: 8 N
+        tactile_target: auto
+        slip_response: retighten
+    - let: w
+      from:
+        sense.weigh: { method: static }
+    - branch:
+        predicate: { force_exceeds: 5 N }
+        then:
+          place.put_down: { frame: heavy_bin }
+        else:
+          place.put_down: { frame: light_bin }

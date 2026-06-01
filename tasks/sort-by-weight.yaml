@@ -1,0 +1,8 @@
+task:
+  instruction: "Weigh the item in hand and sort it into the heavy or light bin."
+  success_criteria: "item placed in the correct bin by weight"
+scene:
+  objects:
+    - { ref: item, kind: small_rigid, est_mass: 1.0 N, features: [graspable_face] }
+  frames: [world, heavy_bin, light_bin]
+  notes: "two bins within reach; threshold at ~5 N"

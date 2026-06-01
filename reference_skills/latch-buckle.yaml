@@ -1,0 +1,27 @@
+skill: latch-buckle
+description: >
+  Locate a buckle tongue, pinch it, align to the catch, and snap it home, confirming the
+  engagement holds. Group A by primitive (force.snap_engage is engine-implemented), but a
+  descriptor that does not declare force.snap_engage will correctly capability-reject it.
+objects:
+  tongue: { ref: tongue, estimated_mass: 0.3 N }
+  catch: { ref: catch }
+body:
+  sequence:
+    - let: tongue_t
+      from:
+        sense.locate: { target_ref: tongue, modality: auto }
+    - grasp.pinch:
+        target: tongue_t
+        force_budget: 5 N
+        tactile_target: auto
+        slip_response: retighten
+    - transport.move_to_pose:
+        target_pose: { frame: catch, offset: { along: -z, distance: 15 mm } }
+    - force.snap_engage:
+        mate_feature: catch
+        engage_direction: +z
+        force_budget: 12 N
+        confirm_held: true
+        compliance: active
+    - grasp.release: { grasp_handle: active }

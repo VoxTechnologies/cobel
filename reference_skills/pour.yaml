@@ -1,0 +1,22 @@
+skill: pour
+description: >
+  Pinch a cup, carry it over the bowl, and set it down. Group B: place.put_down is valid
+  Skill ISA but outside the reference engine's implemented set (beyond_engine at retarget).
+objects:
+  cup: { ref: cup, estimated_mass: 2.0 N }
+  bowl: { ref: bowl }
+  table: { ref: table }
+body:
+  sequence:
+    - let: cup_t
+      from:
+        sense.locate: { target_ref: cup, modality: auto }
+    - grasp.pinch:
+        target: cup_t
+        force_budget: 8 N
+        tactile_target: auto
+        slip_response: retighten
+    - transport.move_to_pose:
+        target_pose: { frame: bowl, offset: { along: +z, distance: 60 mm } }
+    - place.put_down:
+        target_surface: auto

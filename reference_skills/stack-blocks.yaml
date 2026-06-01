@@ -1,0 +1,22 @@
+skill: stack-blocks
+description: >
+  Pinch a block, carry it over the tower, and stack it with centered alignment. Group B:
+  place.stack is valid Skill ISA but outside the engine's implemented set (beyond_engine).
+objects:
+  block: { ref: block, estimated_mass: 1.0 N }
+  tower: { ref: tower }
+body:
+  sequence:
+    - let: block_t
+      from:
+        sense.locate: { target_ref: block, modality: auto }
+    - grasp.pinch:
+        target: block_t
+        force_budget: 6 N
+        tactile_target: auto
+        slip_response: retighten
+    - transport.move_to_pose:
+        target_pose: { frame: tower, offset: { along: +z, distance: 50 mm } }
+    - place.stack:
+        support_object: tower
+        alignment: centered

@@ -1,0 +1,9 @@
+task:
+  instruction: "Stack the block on top of the tower, keeping it centered."
+  success_criteria: "block resting centered on top of the tower"
+scene:
+  objects:
+    - { ref: block, kind: cuboid, est_mass: 1.0 N, features: [top_face, bottom_face] }
+    - { ref: tower, kind: stack }
+  frames: [world, tower]
+  notes: "block staged beside the tower; both within reach"

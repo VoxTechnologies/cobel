@@ -1,0 +1,9 @@
+task:
+  instruction: "Insert the fuse into the holder and seat it firmly."
+  success_criteria: "fuse fully seated in the holder; released"
+scene:
+  objects:
+    - { ref: fuse, kind: small_rigid, est_mass: 0.2 N, features: [blade_terminals] }
+    - { ref: holder, kind: receptacle }
+  frames: [world, holder]
+  notes: "fuse staged ~80 mm from the holder; both within reach"

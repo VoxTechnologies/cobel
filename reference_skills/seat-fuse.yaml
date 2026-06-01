@@ -1,0 +1,31 @@
+skill: seat-fuse
+description: >
+  Locate a fuse, pinch it, carry it over the holder, and seat it under force control.
+  Group A: all primitives are in the reference engine's implemented set.
+objects:
+  fuse: { ref: fuse, estimated_mass: 0.2 N }
+  holder: { ref: holder }
+body:
+  sequence:
+    - let: fuse_t
+      from:
+        sense.locate: { target_ref: fuse, modality: auto }
+    - grasp.pinch:
+        target: fuse_t
+        force_budget: 5 N
+        tactile_target: auto
+        slip_response: retighten
+    - transport.move_to_pose:
+        target_pose: { frame: holder, offset: { along: -z, distance: 20 mm } }
+    - let: holder_t
+      from:
+        sense.locate: { target_ref: holder, modality: visual }
+    - force.insert_fit:
+        target_fit: holder_t
+        force_budget: 10 N
+        compliance: active
+        stop_condition:
+          all_of:
+            - effort_rise: 8 N
+            - reached: { depth: 6 mm }
+    - grasp.release: { grasp_handle: active }
