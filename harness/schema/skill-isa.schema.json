@@ -1,0 +1,2056 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RFL Skill ISA composition file",
+  "description": "Validates a Skill ISA composition file (the JSON / YAML form an author writes; reference instance examples/01-cable-insertion/skill.yaml). Structural validation per 01-skill-isa.md: the compositional algebra (sequence / parallel / reactive / repeat / branch / let-bind), that every primitive call key is one of the 50 ISA primitive ids, and that an extension call is namespaced ext.<ns>.<name>. Per-primitive parameter names, types, units, and enums are precisely constrained for ALL 50 primitives (approach B complete — every category fully typed, verified by a cross-check that each primitive's schema property set equals its 01 parameter-table column). reach.retract (§ 1.4) and force.insert_fit (§ 6.1) were reconciled with the reference in a pre-freeze formatting pass (retract_axis → direction; axial_force_budget → force_budget; seating_condition: SeatingSpec → stop_condition: StopCondition); their stop / direction parameters use the precise StopCondition family and the broadened Direction (a signed axis such as -tool_axis, or a unit vector). The StopCondition-family parameters of the other force primitives (pull.stop_condition, screw/unscrew.completion, press_button.actuation, cut.completion, scrub.completion, snap_engage.snap_signature) remain a deferred StopSpec pending the full per-primitive § 6 prose normalization onto the family. Backs conformance test class 1 (parser conformance, 05-conformance.md). The algebra is the abstract BNF of 01 § Compositional algebra; this schema fixes its concrete YAML serialization, where a let-bind is a sequence statement {let, from} whose binding scopes over the rest of the enclosing sequence (the BNF's explicit in(...) is accepted as an optional key).",
+  "type": "object",
+  "required": ["skill", "body"],
+  "additionalProperties": false,
+  "properties": {
+    "skill": {
+      "type": "string",
+      "description": "Skill name (the composition's identifier)."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary of what the skill does."
+    },
+    "objects": { "$ref": "#/$defs/ObjectMap" },
+    "body": {
+      "$ref": "#/$defs/Composition",
+      "description": "The skill body: a single Composition (typically a sequence)."
+    }
+  },
+  "$defs": {
+    "ObjectMap": {
+      "type": "object",
+      "description": "Task object references, keyed by local name. Each entry names an ObjectRef whose pose is resolved at runtime by a sense.* primitive (01 § Object reference).",
+      "additionalProperties": { "$ref": "#/$defs/ObjectDecl" }
+    },
+    "ObjectDecl": {
+      "type": "object",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "The object identity (ObjectRef) this local name binds to."
+        },
+        "estimated_mass": {
+          "$ref": "#/$defs/Force",
+          "description": "Optional declared weight (a known prior), mirroring ObjectTarget.estimated_mass; supplied to the grasp-force derivations at retarget time."
+        }
+      }
+    },
+    "PrimitiveId": {
+      "description": "The 50 Skill ISA primitive ids, category.primitive in lowercase snake_case (01 § Provisional primitive enumeration). The enumeration is closed; extension primitives use the ext.<ns>.<name> form instead.",
+      "enum": [
+        "reach.to_pose", "reach.approach", "reach.align", "reach.retract", "reach.hover", "reach.scan",
+        "grasp.pinch", "grasp.power", "grasp.hook", "grasp.precision_tripod", "grasp.lateral", "grasp.platform", "grasp.pin", "grasp.envelope", "grasp.adjust", "grasp.release",
+        "in_hand.rotate", "in_hand.translate", "in_hand.regrasp", "in_hand.roll", "in_hand.pivot", "in_hand.slide", "in_hand.flip",
+        "transport.move_to_pose", "transport.follow_trajectory", "transport.handoff", "transport.carry", "transport.lift", "transport.lower",
+        "place.put_down", "place.stack", "place.insert_loose", "place.orient", "place.hand_to", "place.discard",
+        "force.insert_fit", "force.push", "force.pull", "force.screw", "force.unscrew", "force.press_button", "force.cut", "force.wipe", "force.scrub", "force.snap_engage",
+        "sense.probe", "sense.inspect", "sense.weigh", "sense.locate", "sense.verify"
+      ]
+    },
+    "Params": {
+      "type": ["object", "null"],
+      "description": "A primitive's parameter block. Structurally an open object (or absent / null for a param-less call). This is the open floor that applies to every primitive; for primitives precisely typed so far it is intersected with a per-primitive schema via the allOf clauses of PrimitiveCall, so the precise schema is what binds for those keys."
+    },
+    "Ref": {
+      "type": "string",
+      "pattern": "^&?(?!(auto|active|until|all|until_satisfied)$)[A-Za-z_][A-Za-z0-9_]*$",
+      "description": "A reference to a let-bound value (BNF Reference / Identifier): a bare identifier, optionally &-prefixed, naming a value bound earlier by a let-bind. In the serialized form any typed parameter may instead be such a reference (e.g. target: connector_t). The BNF's reserved terminals (auto, active, until, all, until_satisfied) are excluded so they are accepted only where a parameter's own schema lists them (Auto / GraspHandle / HoldDuration / Axes / Count); this keeps e.g. hold_duration: auto from sneaking in as a reference."
+    },
+    "Axis": {
+      "type": "string",
+      "pattern": "^[xyz]$",
+      "description": "An unsigned principal axis of a frame (01 § Geometric types): x, y, or z. Distinct from SignedAxis (a +/- axis)."
+    },
+    "Auto": {
+      "const": "auto",
+      "description": "Defer the value to the Translation Layer's planner (BNF Auto). Accepted only where the spec types a parameter as T | auto."
+    },
+    "Force": {
+      "description": "A force value (01 § Dimensioned scalars; canonical wire unit N): a unit-suffixed quantity string (N / kN / mN) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(N|kN|mN)$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Duration": {
+      "description": "A duration value (01 § Dimensioned scalars; canonical wire unit s): a unit-suffixed quantity string (s / ms), a let-reference, or auto.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(s|ms)$" },
+        { "$ref": "#/$defs/Ref" },
+        { "$ref": "#/$defs/Auto" }
+      ]
+    },
+    "Length": {
+      "description": "A length value (01 § Dimensioned scalars; canonical wire unit m, parameter tables may author in mm): a unit-suffixed quantity string (m / mm / cm) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(m|mm|cm)$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Ratio": {
+      "description": "A dimensionless ratio (01 § Dimensioned scalars), [0,1) unless stated: a number in that range or a let-reference.",
+      "anyOf": [
+        { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "HoldDuration": {
+      "description": "A hold duration (01 § reach.hover / force.push): a duration quantity (s / ms), the literal until (defer to an enclosing reactive), or a let-reference. Unlike Duration this does NOT accept auto.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(s|ms)$" },
+        { "const": "until" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Angle": {
+      "description": "An angle value (01 § Dimensioned scalars; canonical wire unit rad, parameter tables may author in deg): a unit-suffixed quantity string (deg / rad) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(deg|rad)$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Velocity": {
+      "description": "A linear-velocity value (01 § Dimensioned scalars; canonical wire unit m/s): a unit-suffixed quantity string (m/s) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+m/s$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Acceleration": {
+      "description": "A linear-acceleration value (01 § Dimensioned scalars; canonical wire unit m/s^2): a unit-suffixed quantity string (m/s^2 or m/s²) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(m/s\\^2|m/s²)$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "AngularVelocity": {
+      "description": "An angular-velocity value (01 § Dimensioned scalars; canonical wire unit rad/s): a unit-suffixed quantity string (rad/s) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+rad/s$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "FrameRef": {
+      "type": "string",
+      "description": "A reference to a calibrated frame on the kinematic tree or in the world (01 § Geometric types). A frame name (e.g. task, receptacle, tcp_thumb)."
+    },
+    "SignedAxis": {
+      "type": "string",
+      "pattern": "^[+-][xyz]$",
+      "description": "A signed principal axis of a frame (01 § Geometric types), e.g. -z. Symbolic tool-axis spellings (e.g. -tool_axis) are NOT this type and are not yet covered."
+    },
+    "GraspHandle": {
+      "description": "A handle to an established grasp (01 § GraspRef): the literal active (the current grasp on the controlled frame) or a let-reference to a grasp bound earlier.",
+      "anyOf": [
+        { "const": "active" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "ContactResponse": {
+      "enum": ["abort", "stop", "comply"],
+      "description": "Reaction to unplanned contact, shared across reach / transport primitives."
+    },
+    "Compliance": {
+      "enum": ["passive", "active", "auto"],
+      "description": "Compliance mode requested for a contact-forming primitive (01 § force / sense.probe)."
+    },
+    "Direction": {
+      "description": "A unit vector in a named frame (01 § Geometric types): a signed named axis (e.g. -tool_axis, -z, +x), an inline unit-vector object, or a let-reference. The planner literal auto is accepted only where a parameter's own schema lists it.",
+      "anyOf": [
+        { "type": "string", "pattern": "^[+-][A-Za-z_][A-Za-z0-9_]*$" },
+        { "type": "object" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "EffectorRef": {
+      "description": "A reference to a control frame on the same embodiment (a bare frame name) or another (embodiment_id:frame_name) (01 § EffectorRef resolution; transport.handoff receiver). A frame name, an embodiment_id:frame_name string, or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(:[A-Za-z_][A-Za-z0-9_]*)?$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Torque": {
+      "description": "A torque value (01 § Dimensioned scalars; canonical wire unit N·m = force × length): a unit-suffixed quantity string (N·m / Nm / N*m) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+(N·m|Nm|N\\*m)$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "Frequency": {
+      "description": "A frequency value (01 § Dimensioned scalars; canonical wire unit Hz = 1 / s): a unit-suffixed quantity string (Hz) or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?\\s+Hz$" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "SC_effort_drop": {
+      "description": "StopCondition family member: a sudden resistance-drop event (breakaway / separation / disengagement / torque_drop). The bare string effort_drop, or the single-key object form.",
+      "oneOf": [
+        { "const": "effort_drop" },
+        { "type": "object", "required": ["effort_drop"], "maxProperties": 1 }
+      ]
+    },
+    "SC_detent": {
+      "description": "StopCondition family member: a rise-then-drop effort signature (a click). The bare string detent, or the single-key object form.",
+      "oneOf": [
+        { "const": "detent" },
+        { "type": "object", "required": ["detent"], "maxProperties": 1 }
+      ]
+    },
+    "SC_effort_rise_force": {
+      "type": "object",
+      "description": "StopCondition family member: effort_rise to a Force level (e.g. seating force, tension, press / engagement threshold).",
+      "required": ["effort_rise"],
+      "additionalProperties": false,
+      "properties": { "effort_rise": { "anyOf": [ { "$ref": "#/$defs/Force" }, { "$ref": "#/$defs/Ref" } ] } }
+    },
+    "SC_effort_rise_torque": {
+      "type": "object",
+      "description": "StopCondition family member: effort_rise to a Torque level (fastener tightness).",
+      "required": ["effort_rise"],
+      "additionalProperties": false,
+      "properties": { "effort_rise": { "anyOf": [ { "$ref": "#/$defs/Torque" }, { "$ref": "#/$defs/Ref" } ] } }
+    },
+    "SC_reached_depth": {
+      "type": "object",
+      "description": "StopCondition family member: reached a depth (a Length progress value); bare Length, a {depth: Length} object, or a let-reference.",
+      "required": ["reached"],
+      "additionalProperties": false,
+      "properties": {
+        "reached": { "anyOf": [
+          { "$ref": "#/$defs/Length" },
+          { "$ref": "#/$defs/Ref" },
+          { "type": "object", "required": ["depth"], "maxProperties": 1, "additionalProperties": false, "properties": { "depth": { "$ref": "#/$defs/Length" } } }
+        ] }
+      }
+    },
+    "SC_reached_distance": {
+      "type": "object",
+      "description": "StopCondition family member: reached a distance (a Length progress value); bare Length, a {distance: Length} object, or a let-reference.",
+      "required": ["reached"],
+      "additionalProperties": false,
+      "properties": {
+        "reached": { "anyOf": [
+          { "$ref": "#/$defs/Length" },
+          { "$ref": "#/$defs/Ref" },
+          { "type": "object", "required": ["distance"], "maxProperties": 1, "additionalProperties": false, "properties": { "distance": { "$ref": "#/$defs/Length" } } }
+        ] }
+      }
+    },
+    "SC_reached_advance": {
+      "type": "object",
+      "description": "StopCondition family member: reached an axial advance (a Length progress value); bare Length, an {advance: Length} object, or a let-reference.",
+      "required": ["reached"],
+      "additionalProperties": false,
+      "properties": {
+        "reached": { "anyOf": [
+          { "$ref": "#/$defs/Length" },
+          { "$ref": "#/$defs/Ref" },
+          { "type": "object", "required": ["advance"], "maxProperties": 1, "additionalProperties": false, "properties": { "advance": { "$ref": "#/$defs/Length" } } }
+        ] }
+      }
+    },
+    "SC_count": {
+      "type": "object",
+      "description": "StopCondition family member: a repetition count (turns / passes), a positive integer or a let-reference.",
+      "required": ["count"],
+      "additionalProperties": false,
+      "properties": { "count": { "anyOf": [ { "type": "integer", "minimum": 1 }, { "$ref": "#/$defs/Ref" } ] } }
+    },
+    "SC_elapsed": {
+      "type": "object",
+      "description": "StopCondition family member: elapsed time (a Duration).",
+      "required": ["elapsed"],
+      "additionalProperties": false,
+      "properties": { "elapsed": { "$ref": "#/$defs/Duration" } }
+    },
+    "SC_landmark": {
+      "type": "object",
+      "description": "StopCondition family member: a declared reference reached (tactile_landmark / external_reference / path_complete), a name string or a let-reference.",
+      "required": ["landmark"],
+      "additionalProperties": false,
+      "properties": { "landmark": { "anyOf": [ { "type": "string" }, { "$ref": "#/$defs/Ref" } ] } }
+    },
+    "SC_predicate": {
+      "type": "object",
+      "description": "StopCondition family member: a sense.verify predicate became true (the force-sense coupling point).",
+      "required": ["predicate"],
+      "additionalProperties": false,
+      "properties": { "predicate": { "anyOf": [ { "$ref": "#/$defs/Predicate" }, { "$ref": "#/$defs/Ref" } ] } }
+    },
+    "SeatingSpec": {
+      "description": "force.insert_fit stop_condition (01 § 316 restriction): effort_rise(force) | reached(depth) | all_of{effort_rise(force), reached(depth)} — the conjunction is the seating/jam discriminator.",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_effort_rise_force" },
+        { "$ref": "#/$defs/SC_reached_depth" },
+        {
+          "type": "object", "required": ["all_of"], "maxProperties": 1, "additionalProperties": false,
+          "properties": { "all_of": { "type": "array", "minItems": 1, "items": { "oneOf": [ { "$ref": "#/$defs/SC_effort_rise_force" }, { "$ref": "#/$defs/SC_reached_depth" } ] } } }
+        }
+      ]
+    },
+    "PullStop": {
+      "description": "force.pull stop_condition (01 § 317 restriction): reached(distance) | effort_drop | effort_rise(tension, a Force).",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_reached_distance" },
+        { "$ref": "#/$defs/SC_effort_drop" },
+        { "$ref": "#/$defs/SC_effort_rise_force" }
+      ]
+    },
+    "ScrewStop": {
+      "description": "force.screw / force.unscrew completion (01 § 318 restriction): effort_rise(torque) | count(turns) | all_of{effort_rise(torque), reached(advance)}. Per the project decision the unscrew effort_drop variant is not typed; both share this restriction.",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_effort_rise_torque" },
+        { "$ref": "#/$defs/SC_count" },
+        {
+          "type": "object", "required": ["all_of"], "maxProperties": 1, "additionalProperties": false,
+          "properties": { "all_of": { "type": "array", "minItems": 1, "items": { "oneOf": [ { "$ref": "#/$defs/SC_effort_rise_torque" }, { "$ref": "#/$defs/SC_reached_advance" } ] } } }
+        }
+      ]
+    },
+    "ActuationSpec": {
+      "description": "force.press_button / force.snap_engage actuation / snap_signature (01 § 319 restriction): detent | effort_rise(force_threshold, a Force).",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_detent" },
+        { "$ref": "#/$defs/SC_effort_rise_force" }
+      ]
+    },
+    "CutStop": {
+      "description": "force.cut completion (01 § 320 restriction): landmark(path_complete) | effort_drop (separation) | reached(depth).",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_landmark" },
+        { "$ref": "#/$defs/SC_effort_drop" },
+        { "$ref": "#/$defs/SC_reached_depth" }
+      ]
+    },
+    "ScrubStop": {
+      "description": "force.scrub completion (01 § 321 restriction): elapsed(duration) | count(passes) | predicate(state_change).",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_elapsed" },
+        { "$ref": "#/$defs/SC_count" },
+        { "$ref": "#/$defs/SC_predicate" }
+      ]
+    },
+    "SlideStop": {
+      "description": "in_hand.slide stop_condition (01 § 315 restriction): reached(distance) | landmark(tactile_landmark / external_reference).",
+      "oneOf": [
+        { "$ref": "#/$defs/SC_reached_distance" },
+        { "$ref": "#/$defs/SC_landmark" }
+      ]
+    },
+    "Compound": {
+      "description": "A perception-derived compound value (01 § Target / reference types — ObjectTarget, FeatureRef, SurfaceTarget, Pose6D, TactileTarget, ContactConfig). RFL fixes the type but not the estimation method; here it is supplied inline as an object or by a let-reference (typically a sense.* result). Internal field typing is a deeper increment.",
+      "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "CompoundOrAuto": {
+      "description": "A perception-derived compound (see Compound) typed T | auto in the spec: the literal auto (planner-derived), an inline object, or a let-reference.",
+      "anyOf": [ { "$ref": "#/$defs/Auto" }, { "type": "object" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "TactileTargetOrAuto": {
+      "description": "TactileTarget | auto (the type the grasp params carry, 01 § 2): the literal auto (the planner derives the per-mode default of 04 § The TactileTarget type), an inline TactileTarget, or a let-reference (typically a sense.* result). The precise inline form replaces the earlier open-object floor — the deeper increment 01's grasp params deferred.",
+      "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/TactileTarget" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "TactileTarget": {
+      "description": "A contact-confirmation criterion in TactileManifold terms (04 § The TactileTarget type): all_of a non-empty set of clauses, each a feature comparison quantified over a site set. Authored inline; the auto and let-reference forms are carried by TactileTargetOrAuto.",
+      "type": "object",
+      "required": ["all_of"],
+      "additionalProperties": false,
+      "properties": {
+        "all_of": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/TactileClause" } }
+      }
+    },
+    "TactileClause": {
+      "description": "One clause of a TactileTarget (04 § The TactileTarget type): TactileClause := (feature, comparator, threshold, quantifier).",
+      "type": "object",
+      "required": ["feature", "comparator", "threshold", "quantifier"],
+      "additionalProperties": false,
+      "properties": {
+        "feature": { "$ref": "#/$defs/TactileFeature" },
+        "comparator": { "enum": [">=", "<=", "==", "within"], "description": "The BNF comparators >= | <= | == | within; within takes a [lo, hi] range threshold." },
+        "threshold": { "$ref": "#/$defs/TactileThreshold" },
+        "quantifier": { "$ref": "#/$defs/TactileSiteQuantifier" }
+      }
+    },
+    "TactileFeature": {
+      "description": "A TactileManifold feature (04 § Feature taxonomy): one of the eleven closed-core features, or an ext.<ns>.<name> registered extension feature (06). The closed core is fixed so the conformance suite can enumerate it.",
+      "oneOf": [
+        { "enum": ["contact", "normal_force", "shear", "pressure", "contact_area", "contact_centroid", "load_distribution", "slip", "force_derivative", "deformation_rate", "bending"] },
+        { "type": "string", "pattern": "^ext\\.[a-z_]+\\.[a-z_]+$" }
+      ]
+    },
+    "TactileThreshold": {
+      "description": "A TactileClause threshold, typed to the feature's quantity (Force N, Pressure Pa, Probability 0-1, Area m^2, ...). Exact per-feature quantity typing is a deeper increment; here a threshold is a unit-suffixed quantity string, a bare number (dimensionless features such as contact), a two-element [lo, hi] range (the within comparator), or a let-reference.",
+      "anyOf": [
+        { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?(\\s+\\S+)?$" },
+        { "type": "number" },
+        { "type": "array", "minItems": 2, "maxItems": 2, "items": { "anyOf": [ { "type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?(\\s+\\S+)?$" }, { "type": "number" } ] } },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "TactileSiteQuantifier": {
+      "description": "A site quantifier over a relational role (04 § Site model): at_least(n, role) | all(role) | exactly(n, role).",
+      "oneOf": [
+        { "type": "object", "required": ["at_least"], "additionalProperties": false, "properties": { "at_least": { "type": "object", "required": ["n", "role"], "additionalProperties": false, "properties": { "n": { "type": "integer", "minimum": 1 }, "role": { "$ref": "#/$defs/TactileSiteRole" } } } } },
+        { "type": "object", "required": ["all"], "additionalProperties": false, "properties": { "all": { "type": "object", "required": ["role"], "additionalProperties": false, "properties": { "role": { "$ref": "#/$defs/TactileSiteRole" } } } } },
+        { "type": "object", "required": ["exactly"], "additionalProperties": false, "properties": { "exactly": { "type": "object", "required": ["n", "role"], "additionalProperties": false, "properties": { "n": { "type": "integer", "minimum": 1 }, "role": { "$ref": "#/$defs/TactileSiteRole" } } } } }
+      ]
+    },
+    "TactileSiteRole": {
+      "enum": ["antipodal", "enclosure", "support", "probe"],
+      "description": "A site relational role (04 § Site model)."
+    },
+    "UncertaintyBound": {
+      "description": "A scalar or covariance bounding the pose / geometry estimate error (01 § Target types); carried by every perception-derived target and gating the *_underdetermined preconditions. RFL fixes that it is present and its magnitude type, not the covariance representation — a non-negative scalar (optionally unit-suffixed), a covariance object, or a let-reference.",
+      "anyOf": [
+        { "type": "number", "minimum": 0 },
+        { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(\\s+\\S+)?$" },
+        { "type": "object" },
+        { "$ref": "#/$defs/Ref" }
+      ]
+    },
+    "SurfaceTarget": {
+      "description": "A perception-derived surface target (01 § Target types): point (a Pose6D position) + outward normal + frame + uncertainty. RFL fixes the field set and each field's type, not the estimation method; point's Pose6D-position representation is deferred to 02, so it is the object/array/reference floor. Authored inline; the auto and let-reference forms are carried by SurfaceTargetOrAuto. A bare FrameRef (a frame name) reaches a SurfaceTarget slot as a let-reference.",
+      "type": "object",
+      "required": ["point", "normal", "frame"],
+      "additionalProperties": false,
+      "properties": {
+        "point": {
+          "description": "A Pose6D position (01) — the surface point. Representation deferred to 02: an inline object, a coordinate array, or a let-reference.",
+          "anyOf": [ { "type": "object" }, { "type": "array" }, { "$ref": "#/$defs/Ref" } ]
+        },
+        "normal": { "$ref": "#/$defs/Direction" },
+        "frame": { "$ref": "#/$defs/FrameRef" },
+        "uncertainty": { "$ref": "#/$defs/UncertaintyBound" }
+      }
+    },
+    "SurfaceTargetOrAuto": {
+      "description": "SurfaceTarget | auto (the type place target_surface params carry, 01): the literal auto (planner-derived, e.g. the surface directly below along gravity), an inline SurfaceTarget, or a let-reference.",
+      "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "Pose6D": {
+      "description": "A rigid pose, position + orientation in a FrameRef (01 § Geometric types). The representation (SE(3) / quat+t / axis-angle) is deferred to 02, so RFL fixes only that it is a pose value: an inline object, a coordinate array, or a let-reference.",
+      "anyOf": [ { "type": "object" }, { "type": "array" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "GeometryRef": {
+      "description": "A reference to an object's geometric model (01 § Object reference, geometry, and measurement): perception-derived, RFL fixes the queryable aspects (rolling surface, container) not the estimation. An inline object or a let-reference.",
+      "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "FeatureRef": {
+      "description": "A reference to a feature of an object (01 § Target types): parent ObjectTarget + kind {handle, loop, bar, edge, face, ...}, resolving to a SurfaceTarget or sub-geometry. Perception-derived: an inline object or a let-reference.",
+      "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ]
+    },
+    "ObjectTarget": {
+      "description": "A perception-derived object target (01 § Target types): pose + geometry + estimated_mass + center_of_mass + optional max_contact_force (fragility) + features + uncertainty. RFL fixes the field set and each field's type, not the estimation method; pose / center_of_mass (a Pose6D position) stay the deferred-representation floor. Authored inline; the let-reference form (a sense.* result) is accepted wherever an ObjectTarget is expected. Only pose is required at the field level — the rest are perception-supplied as available.",
+      "type": "object",
+      "required": ["pose"],
+      "additionalProperties": false,
+      "properties": {
+        "pose": { "$ref": "#/$defs/Pose6D" },
+        "geometry": { "$ref": "#/$defs/GeometryRef" },
+        "estimated_mass": { "$ref": "#/$defs/Force" },
+        "center_of_mass": { "$ref": "#/$defs/Pose6D" },
+        "max_contact_force": { "$ref": "#/$defs/Force" },
+        "features": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FeatureRef" },
+          "description": "set<FeatureRef> — the object's referenceable features."
+        },
+        "uncertainty": { "$ref": "#/$defs/UncertaintyBound" }
+      }
+    },
+    "SlipResponse": {
+      "enum": ["abort", "retighten", "hold"],
+      "description": "Reaction to detected slip, shared across grasp primitives (default retighten)."
+    },
+    "RegripPolicy": {
+      "enum": ["gaiting", "continuous", "auto"],
+      "description": "How the embodiment effects an in-hand reorientation / translation — finger gaiting vs continuous (01 § in_hand.rotate / translate); a hint resolved by the Translation Layer (default auto)."
+    },
+    "Axes": {
+      "description": "A set of principal axes, or all (01 § reach.align). Either the literal all or a non-empty array drawn from {x, y, z}.",
+      "anyOf": [
+        { "const": "all" },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["x", "y", "z"] }
+        }
+      ]
+    },
+    "GraspPinchParams": {
+      "type": "object",
+      "description": "Parameters of grasp.pinch (01 § 2.1), precisely typed (approach B) — the eight parameters of the § 2.1 table, no more. target + force_budget are required; the rest carry the spec defaults. Any value may be a let-reference; auto is accepted only where the spec types the parameter as T | auto. The internal field typing of ObjectTarget / Pose6D / TactileTarget is a deeper increment — here each is an inline object or a reference.",
+      "required": ["target", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "ObjectTarget to pinch-grasp (perception-derived; typically reaches the call as a let-reference). An inline ObjectTarget or a let-reference.",
+          "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ]
+        },
+        "force_budget": {
+          "$ref": "#/$defs/Force",
+          "description": "Max grip force, > 0; clamped to embodiment.limits.grip_force_max and target.max_contact_force if declared."
+        },
+        "grasp_pose": {
+          "description": "Pose6D | auto — pinch contact-frame pose; auto = planner-derived from target geometry.",
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "type": "object" }, { "$ref": "#/$defs/Ref" } ]
+        },
+        "grasp_width": {
+          "description": "Length | auto — pre-close opening; auto = from target geometry.",
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ]
+        },
+        "controlled_frame": {
+          "type": "string",
+          "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)."
+        },
+        "tactile_target": {
+          "$ref": "#/$defs/TactileTargetOrAuto",
+          "description": "TactileTarget | auto — contact-confirmation criterion in TactileManifold terms; auto = normal_force >= epsilon at >= 2 antipodal sites."
+        },
+        "slip_response": {
+          "enum": ["abort", "retighten", "hold"],
+          "description": "Reaction to detected slip (default retighten)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "SenseLocateParams": {
+      "type": "object",
+      "description": "Parameters of sense.locate (01 § 7.4), precisely typed (approach B). target_ref is required; the rest carry the spec defaults. auto is accepted only where the spec types the parameter as T | auto; Region internals are deferred (inline object or reference).",
+      "required": ["target_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "target_ref": {
+          "$ref": "#/$defs/Ref",
+          "description": "ObjectRef | FeatureRef — the object identity / feature whose pose is estimated."
+        },
+        "modality": {
+          "enum": ["visual", "tactile", "fused", "auto"],
+          "description": "Sensing modality (default auto = best available for the required precision)."
+        },
+        "required_precision": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ],
+          "description": "Length | auto — pose precision the result must achieve (default embodiment default)."
+        },
+        "search_region": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "Region | auto — where to look (default the expected vicinity)."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — reference frame for the returned pose (default task)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "TransportMoveToPoseParams": {
+      "type": "object",
+      "description": "Parameters of transport.move_to_pose (01 § 4.1), precisely typed (approach B). target_pose is required; the rest carry the spec defaults. Pose6D internals are a deeper increment — here target_pose is an inline object or a reference.",
+      "required": ["target_pose"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": {
+          "$ref": "#/$defs/GraspHandle",
+          "description": "GraspRef | active (default active) — the grasp whose held object is transported."
+        },
+        "target_pose": {
+          "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "Pose6D — pose of the held object (not the effector) in frame. Inline object or let-reference."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — calibrated reference frame (default task)."
+        },
+        "position_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 (default 2 mm)."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, geodesic (default 2 deg)."
+        },
+        "max_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ],
+          "description": "Velocity | auto — clamped to embodiment.limits.v_cartesian_max."
+        },
+        "max_acceleration": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Acceleration" } ],
+          "description": "Acceleration | auto — clamped to the grasp's dynamic-stability limit."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — margin for the swept volume of object + effector."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to unplanned contact of object or effector (default abort)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "ReachAlignParams": {
+      "type": "object",
+      "description": "Parameters of reach.align (01 § 1.3), precisely typed (approach B). target_frame is required; the rest carry the spec defaults.",
+      "required": ["target_frame"],
+      "additionalProperties": false,
+      "properties": {
+        "target_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — calibrated reference orientation."
+        },
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — declared control frame (default embodiment.default_control_frame)."
+        },
+        "axes": {
+          "$ref": "#/$defs/Axes",
+          "description": "set<{x,y,z}> | all (default all) — controlled-frame axes to bring parallel to target_frame."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, per-axis geodesic (default 2 deg)."
+        },
+        "hold_position": {
+          "type": "boolean",
+          "description": "Keep controlled_frame position fixed during rotation (default true)."
+        },
+        "position_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 — drift bound while rotating (default 2 mm)."
+        },
+        "max_angular_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/AngularVelocity" } ],
+          "description": "AngularVelocity | auto — clamped to embodiment.limits.w_cartesian_max."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — margin to the static model over the swept volume."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to unplanned contact (default abort)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "GraspReleaseParams": {
+      "type": ["object", "null"],
+      "description": "Parameters of grasp.release (01 § 2.10), precisely typed (approach B). All parameters are optional (grasp_handle defaults to active), so a param-less call (null / empty) is valid.",
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": {
+          "$ref": "#/$defs/GraspHandle",
+          "description": "GraspRef | active (default active) — the grasp to release."
+        },
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)."
+        },
+        "withdraw_axis": {
+          "$ref": "#/$defs/SignedAxis",
+          "description": "SignedAxis — direction to withdraw after opening (default -embodiment.default_tool_axis)."
+        },
+        "clearance_distance": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ],
+          "description": "Length | auto — distance to withdraw clear of the object envelope."
+        },
+        "allow_drop": {
+          "type": "boolean",
+          "description": "Permit release when the object is not stably supported (default false)."
+        },
+        "confirm_release": {
+          "type": "boolean",
+          "description": "Verify no residual contact after opening (default true)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "ReachToPoseParams": {
+      "type": "object",
+      "description": "Parameters of reach.to_pose (01 § 1.1), precisely typed (approach B) — the nine parameters of the § 1.1 table, no more. target_pose is required; the rest carry the spec defaults. There is no acceleration parameter (unlike transport.move_to_pose). Pose6D internals are deferred (inline object or reference).",
+      "required": ["target_pose"],
+      "additionalProperties": false,
+      "properties": {
+        "target_pose": {
+          "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "Pose6D — goal pose of the controlled frame in frame; must admit >= 1 IK solution. Inline object or let-reference."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — calibrated reference frame (default task)."
+        },
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — a declared control frame (default embodiment.default_control_frame)."
+        },
+        "position_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 (default 2 mm)."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, geodesic on SO(3) (default 2 deg)."
+        },
+        "max_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ],
+          "description": "Velocity | auto — clamped to embodiment.limits.v_cartesian_max."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — minimum margin to the static collision model."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to unplanned contact (default abort)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "ReachApproachParams": {
+      "type": "object",
+      "description": "Parameters of reach.approach (01 § 1.2), precisely typed (approach B) — the ten parameters of the § 1.2 table, no more. target + standoff are required; the rest carry the spec defaults. approach_axis is an Axis (unsigned). SurfaceTarget internals are deferred (inline object or reference).",
+      "required": ["target", "standoff"],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "SurfaceTarget — resolvable point + outward unit normal in a calibrated frame. Inline SurfaceTarget or let-reference."
+        },
+        "standoff": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 — terminal distance from the surface along the normal."
+        },
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — declared control frame (default embodiment.default_control_frame)."
+        },
+        "approach_axis": {
+          "$ref": "#/$defs/Axis",
+          "description": "Axis — controlled-frame axis aligned anti-parallel to the normal (default embodiment.default_tool_axis)."
+        },
+        "position_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 (default 2 mm)."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, geodesic on SO(3) (default 2 deg)."
+        },
+        "max_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ],
+          "description": "Velocity | auto — clamped to embodiment.limits.v_cartesian_max."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — margin to the static model, excluding target."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to contact before standoff (default abort)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "ReachHoverParams": {
+      "type": "object",
+      "description": "Parameters of reach.hover (01 § 1.5), precisely typed (approach B) — the twelve parameters of the § 1.5 table, no more. target + standoff are required; the rest carry the spec defaults. There is no timeout parameter (the hold is bounded by duration / the enclosing reactive). duration is Duration | until, not Duration | auto. target is a SurfaceTarget | FrameRef.",
+      "required": ["target", "standoff"],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "SurfaceTarget | FrameRef — reference to hover over; may be time-varying. Inline SurfaceTarget or let-reference (a bare FrameRef name is also a reference)."
+        },
+        "standoff": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 — maintained distance from target along the normal."
+        },
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — declared control frame (default embodiment.default_control_frame)."
+        },
+        "approach_axis": {
+          "$ref": "#/$defs/Axis",
+          "description": "Axis — axis held anti-parallel to the normal (default embodiment.default_tool_axis)."
+        },
+        "station_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length — allowed positional excursion from the hover setpoint (default 2 mm)."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, geodesic (default 2 deg)."
+        },
+        "duration": {
+          "$ref": "#/$defs/HoldDuration",
+          "description": "Duration | until (default until = defer termination to an enclosing reactive)."
+        },
+        "track_target": {
+          "type": "boolean",
+          "description": "Follow a moving target vs. hold a fixed setpoint (default false)."
+        },
+        "settling_time": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto — max time to return within station_tolerance after a disturbance."
+        },
+        "max_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ],
+          "description": "Velocity | auto — correction / tracking speed cap."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — margin to the static model, excluding target."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to unplanned contact (default abort)."
+        }
+      }
+    },
+    "ReachScanParams": {
+      "type": "object",
+      "description": "Parameters of reach.scan (01 § 1.6), precisely typed (approach B) — the thirteen parameters of the § 1.6 table, no more. region + standoff are required; the rest carry the spec defaults. The sweep pattern parameter is named pattern (enum raster / spiral / arc / waypoints, default raster) and the region parameter is named region. coverage_overlap is Ratio | auto. ScanRegion internals are deferred (inline object or reference).",
+      "required": ["region", "standoff"],
+      "additionalProperties": false,
+      "properties": {
+        "region": {
+          "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "ScanRegion — volume / surface / path to cover, in a calibrated frame. Inline object or let-reference."
+        },
+        "sensor_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — frame whose coverage matters (default embodiment.default_sensor_frame)."
+        },
+        "standoff": {
+          "$ref": "#/$defs/Length",
+          "description": "Length > 0 — sensor-to-region distance maintained during the sweep."
+        },
+        "pattern": {
+          "enum": ["raster", "spiral", "arc", "waypoints"],
+          "description": "Deterministic sweep pattern over the region (default raster)."
+        },
+        "coverage_overlap": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Ratio" } ],
+          "description": "Ratio | auto — overlap between passes (default auto, derived from the sensor FOV)."
+        },
+        "sensor_axis": {
+          "$ref": "#/$defs/Axis",
+          "description": "Axis — sensor axis pointed at the region (default the sensor descriptor bore_axis)."
+        },
+        "dwell": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration (default 0) — hold time at each sweep pose for sensor integration."
+        },
+        "position_tolerance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length — per-sweep-pose positional tolerance (default 2 mm)."
+        },
+        "orientation_tolerance": {
+          "$ref": "#/$defs/Angle",
+          "description": "Angle > 0, geodesic (default 2 deg)."
+        },
+        "max_velocity": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ],
+          "description": "Velocity | auto — sweep speed; also bounded by the sensor max_sweep_rate."
+        },
+        "clearance": {
+          "$ref": "#/$defs/Length",
+          "description": "Length >= 0 (default 0) — margin to the static model over the sweep, excluding region."
+        },
+        "contact_response": {
+          "$ref": "#/$defs/ContactResponse",
+          "description": "Reaction to unplanned contact (default abort)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "SenseProbeParams": {
+      "type": "object",
+      "description": "Parameters of sense.probe (01 § 7.1), precisely typed (approach B) — the nine parameters of the § 7.1 table, no more. target_pose + contact_force are required; the rest carry the spec defaults. contact_force is the light force at which contact is REGISTERED (a measurement threshold, not actuation). Pose6D internals are deferred (inline object or reference).",
+      "required": ["target_pose", "contact_force"],
+      "additionalProperties": false,
+      "properties": {
+        "controlled_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — the probing frame, fingertip / probe tip (default embodiment.default_tactile_frame)."
+        },
+        "target_pose": {
+          "anyOf": [ { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "Pose6D — where to probe, in frame. Inline object or let-reference."
+        },
+        "probe_direction": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ],
+          "description": "Direction | auto — approach direction to contact (default auto = expected surface normal)."
+        },
+        "contact_force": {
+          "$ref": "#/$defs/Force",
+          "description": "Force — the light force at which contact is registered (measurement, not actuation)."
+        },
+        "max_probe_force": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ],
+          "description": "Force | auto — hard cap guaranteeing non-disturbance (default auto = below the target's disturb threshold)."
+        },
+        "measure": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["presence", "location", "normal", "stiffness"] },
+          "description": "set<{presence, location, normal, stiffness}> — what to measure on contact (default {presence, location})."
+        },
+        "compliance": {
+          "$ref": "#/$defs/Compliance",
+          "description": "Compliance for a gentle, non-disturbing touch (default auto)."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — reference frame (default task)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "SenseInspectParams": {
+      "type": "object",
+      "description": "Parameters of sense.inspect (01 § 7.2), precisely typed (approach B) — the eight parameters of the § 7.2 table, no more. target is required; the rest carry the spec defaults. observe selects what to capture (interpretation is out of RFL scope). target (ObjectTarget | SurfaceTarget | FrameRef) and observation_pose (Pose6D | auto) internals are deferred (inline object or reference).",
+      "required": ["target"],
+      "additionalProperties": false,
+      "properties": {
+        "sensor_frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — the observing sensor frame (default embodiment.default_sensor_frame)."
+        },
+        "target": {
+          "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "ObjectTarget | SurfaceTarget | FrameRef — what to observe. Inline ObjectTarget / SurfaceTarget or let-reference (a bare FrameRef name is a reference)."
+        },
+        "observe": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["presence", "pose", "appearance", "defect", "custom"] },
+          "description": "set<{presence, pose, appearance, defect, custom}> — what to capture (default {presence, pose}); interpretation is out of RFL scope."
+        },
+        "observation_pose": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "type": "object" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "Pose6D | auto — sensor pose for the observation (default auto = target in FOV, unoccluded, at working distance)."
+        },
+        "standoff": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ],
+          "description": "Length | auto — sensor-to-target distance (default auto = sensor working range)."
+        },
+        "dwell": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration (default 0) — observation integration time."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — reference frame (default task)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "SenseWeighParams": {
+      "type": ["object", "null"],
+      "description": "Parameters of sense.weigh (01 § 7.3), precisely typed (approach B) — the seven parameters of the § 7.3 table, no more. All parameters are optional (grasp_handle defaults to active), so a param-less call (null / empty) is valid. measure selects mass and/or center_of_mass (CoM needs multiple poses).",
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": {
+          "$ref": "#/$defs/GraspHandle",
+          "description": "GraspRef | active (default active) — the grasp holding the object to weigh."
+        },
+        "method": {
+          "enum": ["static", "dynamic", "auto"],
+          "description": "static = support against gravity (F = mg); dynamic = known acceleration (F = ma) (default auto)."
+        },
+        "measure": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["mass", "center_of_mass"] },
+          "description": "set<{mass, center_of_mass}> — what to estimate (default {mass}); CoM needs multiple poses."
+        },
+        "up_direction": {
+          "$ref": "#/$defs/Direction",
+          "description": "Direction — gravity reference for the static method, declared not assumed (default -gravity)."
+        },
+        "settle_time": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto — time to let force readings settle before sampling."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — reference frame (default task)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "SenseVerifyParams": {
+      "type": "object",
+      "description": "Parameters of sense.verify (01 § 7.5), precisely typed (approach B) — the five parameters of the § 7.5 table, no more. predicate is required; the rest carry the spec defaults. predicate is a StatePredicate, unified with the algebra Predicate (a let-reference to a hoisted predicate is also accepted). evidence_modalities is set<{visual, tactile, force, proprioceptive}> | auto. confidence_threshold is Ratio | auto.",
+      "required": ["predicate"],
+      "additionalProperties": false,
+      "properties": {
+        "predicate": {
+          "anyOf": [ { "$ref": "#/$defs/Predicate" }, { "$ref": "#/$defs/Ref" } ],
+          "description": "StatePredicate — the condition to check (a Predicate, § algebra), or a let-reference to one."
+        },
+        "evidence_modalities": {
+          "anyOf": [
+            { "$ref": "#/$defs/Auto" },
+            {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "enum": ["visual", "tactile", "force", "proprioceptive"] }
+            }
+          ],
+          "description": "set<{visual, tactile, force, proprioceptive}> | auto — which observations to use (default auto = those sufficient for the predicate)."
+        },
+        "confidence_threshold": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Ratio" } ],
+          "description": "Ratio | auto — min confidence to assert true / false rather than indeterminate."
+        },
+        "frame": {
+          "$ref": "#/$defs/FrameRef",
+          "description": "FrameRef — reference frame (default task)."
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Duration | auto, > 0."
+        }
+      }
+    },
+    "GraspPowerParams": {
+      "type": "object",
+      "description": "Parameters of grasp.power (01 § 2.2), precisely typed (approach B) — the eight parameters of the § 2.2 table, no more. target + force_budget are required; the rest carry the spec defaults.",
+      "required": ["target", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — object to enclose (inline ObjectTarget or let-reference)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force > 0; clamped to embodiment.limits.grip_force_max and target.max_contact_force." },
+        "grasp_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — enclosure contact-frame pose (default auto)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)." },
+        "enclosure_completeness": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Ratio" } ],
+          "description": "Ratio | auto — required fraction of available contact sites that must engage (default auto)."
+        },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — desired enclosure contact state (default auto)." },
+        "slip_response": { "$ref": "#/$defs/SlipResponse", "description": "Reaction to detected slip (default retighten)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspHookParams": {
+      "type": "object",
+      "description": "Parameters of grasp.hook (01 § 2.3), precisely typed (approach B) — the nine parameters of the § 2.3 table, no more. target + load_budget are required; the rest carry the spec defaults. load_budget (not force_budget) is the load the engagement must support — there is no opposing squeeze.",
+      "required": ["target", "load_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — must expose a hookable feature (inline ObjectTarget or let-reference)." },
+        "hook_feature": { "$ref": "#/$defs/CompoundOrAuto", "description": "FeatureRef | auto — the handle / loop / bar to engage (default auto)." },
+        "load_budget": { "$ref": "#/$defs/Force", "description": "Force > 0 — load the engagement must support (replaces force_budget; no opposing squeeze)." },
+        "load_direction": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ],
+          "description": "Direction | auto — primary supported load direction (default auto = anticipated load, often gravity)."
+        },
+        "seating_force": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ],
+          "description": "Force | auto — small force to fully seat the hook; bounded by target.max_contact_force."
+        },
+        "grasp_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — hook engagement pose (default auto)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — contact along the hook inner curve / full seating (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspPrecisionTripodParams": {
+      "type": "object",
+      "description": "Parameters of grasp.precision_tripod (01 § 2.4), precisely typed (approach B) — the seven parameters of the § 2.4 table, no more. target + force_budget are required; the rest carry the spec defaults.",
+      "required": ["target", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — small object for three-finger opposition (inline ObjectTarget or let-reference)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force > 0; clamped to grip_force_max and target.max_contact_force." },
+        "grasp_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — tripod contact-frame pose (default auto)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — auto = normal_force >= epsilon at 3 non-collinear sites (default auto)." },
+        "slip_response": { "$ref": "#/$defs/SlipResponse", "description": "Reaction to detected slip (default retighten)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspLateralParams": {
+      "type": "object",
+      "description": "Parameters of grasp.lateral (01 § 2.5), precisely typed (approach B) — the eight parameters of the § 2.5 table, no more. target + force_budget are required; the rest carry the spec defaults.",
+      "required": ["target", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — thin / flat object for a side (key-grip) grasp (inline ObjectTarget or let-reference)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force > 0; clamped to limits." },
+        "grasp_edge": { "$ref": "#/$defs/CompoundOrAuto", "description": "FeatureRef | auto — the edge to grip against the thumb side (default auto)." },
+        "grasp_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — lateral contact-frame pose (default auto)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — contact target (default auto)." },
+        "slip_response": { "$ref": "#/$defs/SlipResponse", "description": "Reaction to detected slip (default retighten)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspPlatformParams": {
+      "type": "object",
+      "description": "Parameters of grasp.platform (01 § 2.6), precisely typed (approach B) — the seven parameters of the § 2.6 table, no more. target + load_budget are required; the rest carry the spec defaults. The force parameter is load_budget (max supported weight), not force_budget — this is an open-palm support, not a closing grasp.",
+      "required": ["target", "load_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — must carry a center-of-mass estimate (inline ObjectTarget or let-reference)." },
+        "load_budget": { "$ref": "#/$defs/Force", "description": "Force > 0 — max supported weight; clamped to embodiment.limits.payload_support." },
+        "support_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — pose of the support surface under the object (default auto = center CoM)." },
+        "support_normal": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ],
+          "description": "Direction | auto — direction the support resists, usually anti-gravity (default auto = opposing the load)."
+        },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — support-surface frame (default embodiment.default_support_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — auto = distributed load over the support area with CoM inside the polygon (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspPinParams": {
+      "type": "object",
+      "description": "Parameters of grasp.pin (01 § 2.7), precisely typed (approach B) — the seven parameters of the § 2.7 table, no more. target + against_surface + force_budget are required; the rest carry the spec defaults. There is no slip_response.",
+      "required": ["target", "against_surface", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — object to pin against an opposing surface (inline ObjectTarget or let-reference)." },
+        "against_surface": { "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "SurfaceTarget — the surface to pin the object against (inline SurfaceTarget or let-reference)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force > 0 — normal force pressing the object onto the surface; clamped to grip_force_max and target.max_contact_force." },
+        "pin_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — effector contact pose on the object's exposed face (default auto = opposite against_surface)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared contact frame (default embodiment.default_grasp_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — contact target (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspEnvelopeParams": {
+      "type": "object",
+      "description": "Parameters of grasp.envelope (01 § 2.8), precisely typed (approach B) — the eight parameters of the § 2.8 table, no more. target + force_budget are required; the rest carry the spec defaults.",
+      "required": ["target", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — object / soft body to enclose (inline ObjectTarget or let-reference)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force > 0 — gentle; clamped to limits + fragility." },
+        "mode": {
+          "enum": ["conform", "cage"],
+          "description": "conform to the object, or cage it with clearance (default conform)."
+        },
+        "cage_clearance": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ],
+          "description": "Length | auto — (cage) gap to leave around the object (default auto)."
+        },
+        "grasp_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — enclosure pose (default auto)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared grasp frame (default embodiment.default_grasp_frame)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — desired enclosure contact state (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "GraspAdjustParams": {
+      "type": ["object", "null"],
+      "description": "Parameters of grasp.adjust (01 § 2.9), precisely typed (approach B) — the eight parameters of the § 2.9 table, no more. All parameters are optional (grasp_handle defaults to active), so a param-less call (null / empty) is valid.",
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp to modify." },
+        "new_force_budget": {
+          "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ],
+          "description": "Force | auto — adjusted grip force (default auto = re-derive from feedback)."
+        },
+        "reason": {
+          "enum": ["slip_recovery", "force_adapt", "recenter", "manual"],
+          "description": "Adjustment intent; informs strategy (default manual)."
+        },
+        "recenter": { "type": "boolean", "description": "Re-center contacts on the object (default false)." },
+        "preserve_pose": { "type": "boolean", "description": "Keep object pose fixed during the adjustment (default true)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length — allowed object pose drift during adjust (default 2 mm)." },
+        "tactile_target": { "$ref": "#/$defs/TactileTargetOrAuto", "description": "TactileTarget | auto — target contact state after adjustment (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandRotateParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.rotate (01 § 3.1), precisely typed (approach B) — the ten parameters of the § 3.1 table, no more. axis + angle are required; the rest carry the spec defaults. in_hand has no slip_response.",
+      "required": ["axis", "angle"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp to manipulate within." },
+        "axis": { "$ref": "#/$defs/Direction", "description": "Direction — rotation axis, in the grasp frame." },
+        "angle": { "$ref": "#/$defs/Angle", "description": "Angle — signed rotation magnitude." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle > 0, geodesic on the achieved reorientation (default 2 deg)." },
+        "keep_position": { "type": "boolean", "description": "Hold the object's in-grasp position fixed (rotate, not translate) (default true)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length — drift bound while rotating, when keep_position (default 2 mm)." },
+        "max_angular_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/AngularVelocity" } ], "description": "AngularVelocity | auto — clamped to embodiment.limits.w_inhand_max." },
+        "regrip_policy": { "$ref": "#/$defs/RegripPolicy", "description": "Gaiting vs continuous hint (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandTranslateParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.translate (01 § 3.2), precisely typed (approach B) — the ten parameters of the § 3.2 table, no more. direction + distance are required; the rest carry the spec defaults.",
+      "required": ["direction", "distance"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp to manipulate within." },
+        "direction": { "$ref": "#/$defs/Direction", "description": "Direction — translation direction, in the grasp frame." },
+        "distance": { "$ref": "#/$defs/Length", "description": "Length > 0 — translation magnitude." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 — on the achieved displacement (default 2 mm)." },
+        "keep_orientation": { "type": "boolean", "description": "Hold the object's in-grasp orientation fixed (translate, not rotate) (default true)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle — drift bound while translating, when keep_orientation (default 2 deg)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — clamped to embodiment.limits.v_inhand_max." },
+        "regrip_policy": { "$ref": "#/$defs/RegripPolicy", "description": "Gaiting vs continuous hint (default auto)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandRegraspParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.regrasp (01 § 3.3), precisely typed (approach B) — the eight parameters of the § 3.3 table, no more. target_mode is required; the rest carry the spec defaults. target_mode (GraspMode) and target_contacts (ContactConfig | auto) internals are deferred.",
+      "required": ["target_mode"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the current grasp to transition from." },
+        "target_mode": { "$ref": "#/$defs/Compound", "description": "GraspMode — the grasp mode to transition to (may equal current with different contacts)." },
+        "target_contacts": { "$ref": "#/$defs/CompoundOrAuto", "description": "ContactConfig | auto — desired new contact configuration (default auto = planner-derived for target_mode)." },
+        "target_force_budget": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — force budget of the new grasp (default auto = re-derive)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "preserve_pose": { "type": "boolean", "description": "Keep the object's world pose fixed during the handover (default true)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length — object pose drift bound during handover (default 2 mm)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandRollParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.roll (01 § 3.4), precisely typed (approach B) — the eight parameters of the § 3.4 table, no more. roll_axis + angle are required; the rest carry the spec defaults.",
+      "required": ["roll_axis", "angle"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp to roll within." },
+        "roll_axis": { "$ref": "#/$defs/Direction", "description": "Direction — rolling axis, in the grasp frame (the object's rolling axis)." },
+        "angle": { "$ref": "#/$defs/Angle", "description": "Angle — signed roll magnitude (may exceed 2pi for continuous rolling)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle > 0 (default 2 deg)." },
+        "keep_contact_line": { "type": "boolean", "description": "Keep the object's rolling axis stationary in the grasp frame (default true)." },
+        "max_angular_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/AngularVelocity" } ], "description": "AngularVelocity | auto — clamped to embodiment.limits.w_inhand_max." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandPivotParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.pivot (01 § 3.5), precisely typed (approach B) — the nine parameters of the § 3.5 table, no more. pivot_axis + angle are required; the rest carry the spec defaults. pivot_point is FeatureRef | auto.",
+      "required": ["pivot_axis", "angle"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp providing the pivot contact." },
+        "pivot_point": { "$ref": "#/$defs/CompoundOrAuto", "description": "FeatureRef | auto — the contact point to pivot about (default auto = current securing contact)." },
+        "pivot_axis": { "$ref": "#/$defs/Direction", "description": "Direction — axis of the pivot rotation, in the grasp frame." },
+        "angle": { "$ref": "#/$defs/Angle", "description": "Angle — target swing angle about pivot_axis." },
+        "drive": { "enum": ["actuated", "gravity", "external"], "description": "What drives the swing (default actuated)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle > 0, looser default for passively-driven pivots (default 5 deg)." },
+        "max_angular_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/AngularVelocity" } ], "description": "AngularVelocity | auto — bounds the swing rate (esp. for gravity drive)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandSlideParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.slide (01 § 3.6), precisely typed (approach B) — the eight parameters of the § 3.6 table, no more. slide_direction + stop_condition are required; the rest carry the spec defaults. There is no slip_response (the slide is a controlled slip). stop_condition is a SlideStop (StopCondition family); its internals are deferred to an inline object or a let-reference (precise StopCondition typing is gated on the 01 § 6 formatting pass).",
+      "required": ["slide_direction", "stop_condition"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the established grasp to slide within." },
+        "slide_direction": { "$ref": "#/$defs/Direction", "description": "Direction — direction of slip along the contact surface, in the grasp frame." },
+        "stop_condition": { "$ref": "#/$defs/SlideStop", "description": "SlideStop (01 § 315) — reached(distance) | landmark(tactile_landmark / external_reference)." },
+        "drive": { "enum": ["actuated", "gravity"], "description": "Active feed vs gravity-fed slip (default actuated)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0, looser default (slip is friction-dependent) (default 3 mm)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — bounds slip rate (esp. for gravity feed)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "InHandFlipParams": {
+      "type": "object",
+      "description": "Parameters of in_hand.flip (01 § 3.7), precisely typed (approach B) — the nine parameters of the § 3.7 table, no more. flip_axis + angle + max_release_time + safe_drop_zone are required (flip is the only continuity-suspending primitive; the safe-drop zone is mandatory). target_mode is GraspMode | same. catch_envelope / safe_drop_zone (Region) internals are deferred.",
+      "required": ["flip_axis", "angle", "max_release_time", "safe_drop_zone"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the current grasp to flip from." },
+        "flip_axis": { "$ref": "#/$defs/Direction", "description": "Direction — reorientation axis, in the grasp frame." },
+        "angle": { "$ref": "#/$defs/Angle", "description": "Angle — reorientation magnitude (the angle unreachable without release)." },
+        "target_mode": { "anyOf": [ { "const": "same" }, { "$ref": "#/$defs/Compound" } ], "description": "GraspMode | same — grasp mode to re-establish after the flip (default same)." },
+        "catch_envelope": { "$ref": "#/$defs/CompoundOrAuto", "description": "Region | auto — region within which the re-catch must occur (default auto = planner-derived)." },
+        "max_release_time": { "$ref": "#/$defs/Duration", "description": "Duration > 0 — hard upper bound on the unsecured window." },
+        "safe_drop_zone": { "$ref": "#/$defs/Compound", "description": "Region — region below the operation where an uncaught object lands without harm (mandatory)." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — grasp frame (default from grasp_handle)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlacePutDownParams": {
+      "type": ["object", "null"],
+      "description": "Parameters of place.put_down (01 § 5.1), precisely typed (approach B) — the nine parameters of the § 5.1 table, no more. All parameters are optional (target_surface defaults to auto = the surface directly below along gravity), so a param-less call (null / empty) is valid.",
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "target_surface": { "$ref": "#/$defs/SurfaceTargetOrAuto", "description": "SurfaceTarget | auto — where to place (default auto = the surface directly below along gravity)." },
+        "place_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — object pose at placement (default auto = current orientation, lowered onto the surface)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 (default 2 mm)." },
+        "touchdown_force": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — set-down contact threshold (per transport.lower)." },
+        "require_stable": { "type": "boolean", "description": "Confirm a stably-supported state before releasing (default true)." },
+        "withdraw_axis": { "$ref": "#/$defs/SignedAxis", "description": "SignedAxis — effector withdraw direction after release (default -embodiment.default_tool_axis)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlaceStackParams": {
+      "type": "object",
+      "description": "Parameters of place.stack (01 § 5.2), precisely typed (approach B) — the nine parameters of the § 5.2 table, no more. support_object is required; the rest carry the spec defaults.",
+      "required": ["support_object"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object to stack." },
+        "support_object": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — the object / stack to place on top of (inline ObjectTarget or let-reference)." },
+        "alignment": { "enum": ["centered", "edge_aligned", "pose"], "description": "How to align over support_object's top face (default centered)." },
+        "place_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — (for alignment = pose) explicit placement pose (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 — alignment tolerance over the support (default 2 mm)." },
+        "touchdown_force": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — set-down threshold (gentle, not to disturb the stack)." },
+        "require_stack_stable": { "type": "boolean", "description": "Confirm whole-stack stability before releasing (default true)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlaceInsertLooseParams": {
+      "type": "object",
+      "description": "Parameters of place.insert_loose (01 § 5.3), precisely typed (approach B) — the nine parameters of the § 5.3 table, no more. container is required; the rest carry the spec defaults. The clearance fit (vs force.insert_fit) is reflected in the looser position_tolerance default and the jam_force, not a clearance parameter.",
+      "required": ["container"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "container": { "anyOf": [ { "$ref": "#/$defs/ObjectTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "ObjectTarget — the container / receptacle to insert into (opening + interior); inline ObjectTarget or let-reference." },
+        "insertion_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — object pose for insertion (default auto = aligned with the container opening)." },
+        "insertion_depth": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — how far to insert (default auto = until contained / resting)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 — looser (clearance fit) (default 3 mm)." },
+        "jam_force": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — contact force indicating a jam (wall collision), not a fit." },
+        "require_contained": { "type": "boolean", "description": "Confirm the object is contained before releasing (default true)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlaceOrientParams": {
+      "type": "object",
+      "description": "Parameters of place.orient (01 § 5.4), precisely typed (approach B) — the eight parameters of the § 5.4 table, no more. required_orientation is required; the rest carry the spec defaults. target_surface is SurfaceTarget | auto. required_orientation (OrientationSpec) internals are deferred.",
+      "required": ["required_orientation"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "target_surface": { "$ref": "#/$defs/SurfaceTargetOrAuto", "description": "SurfaceTarget | auto — where to place (default auto)." },
+        "required_orientation": { "$ref": "#/$defs/Compound", "description": "OrientationSpec — the orientation the placed object must have (object axis -> world direction, e.g. label_normal -> up)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle > 0 — on the placed orientation (default 3 deg)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 (default 2 mm)." },
+        "require_stable": { "type": "boolean", "description": "Confirm stable support before release (default true)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlaceHandToParams": {
+      "type": "object",
+      "description": "Parameters of place.hand_to (01 § 5.5), precisely typed (approach B) — the eight parameters of the § 5.5 table, no more. present_timeout is required; the rest carry the spec defaults. weight_transfer_threshold is Ratio (with an auto default).",
+      "required": ["present_timeout"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "handover_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — pose to present the object to the human (default auto = a reachable, ergonomic offer pose)." },
+        "weight_transfer_threshold": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Ratio" } ], "description": "Ratio | auto — fraction of the object's weight the human must take before release (default auto)." },
+        "max_interaction_force": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — hard cap on force exchanged with the human (human-safety limit)." },
+        "present_timeout": { "$ref": "#/$defs/Duration", "description": "Duration — how long to hold the offer before giving up." },
+        "on_no_take": { "enum": ["retain", "retract"], "description": "If the human never takes it: keep holding, or withdraw to a safe pose (default retain)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "PlaceDiscardParams": {
+      "type": "object",
+      "description": "Parameters of place.discard (01 § 5.6), precisely typed (approach B) — the seven parameters of the § 5.6 table, no more. discard_zone is required; the rest carry the spec defaults.",
+      "required": ["discard_zone"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "discard_zone": { "$ref": "#/$defs/Compound", "description": "Region — the region the object must land within (bin interior, hopper, coarse area)." },
+        "release_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — pose from which to release (default auto = a pose over discard_zone minimizing drop height)." },
+        "max_drop_height": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — cap on release height above the landing surface (limit impact)." },
+        "safe_impact": { "type": "boolean", "description": "Require the predicted impact to be non-damaging (default true)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "TransportFollowTrajectoryParams": {
+      "type": "object",
+      "description": "Parameters of transport.follow_trajectory (01 § 4.2), precisely typed (approach B) — the eleven parameters of the § 4.2 table, no more. trajectory is required; the rest carry the spec defaults. Trajectory internals are deferred (inline object or reference).",
+      "required": ["trajectory"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp whose held object is transported." },
+        "trajectory": { "$ref": "#/$defs/Compound", "description": "Trajectory — parameterized path of the held object in frame (waypoints / spline + timing)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — calibrated reference frame (default task)." },
+        "tracking_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 — max deviation of the object from the path (default 3 mm)." },
+        "orientation_tolerance": { "$ref": "#/$defs/Angle", "description": "Angle > 0 — along the path (default 2 deg)." },
+        "timing_mode": { "enum": ["strict", "time_scalable"], "description": "Whether the timing may be slowed to respect dynamic stability (default time_scalable)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — clamped to embodiment.limits.v_cartesian_max." },
+        "max_acceleration": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Acceleration" } ], "description": "Acceleration | auto — clamped to the grasp's dynamic-stability limit." },
+        "clearance": { "$ref": "#/$defs/Length", "description": "Length >= 0 (default 0) — swept volume of object + effector along the path." },
+        "contact_response": { "$ref": "#/$defs/ContactResponse", "description": "Reaction to unplanned contact (default abort)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "TransportHandoffParams": {
+      "type": "object",
+      "description": "Parameters of transport.handoff (01 § 4.3), precisely typed (approach B) — the eight parameters of the § 4.3 table, no more. receiver is required; the rest carry the spec defaults. receiver is an EffectorRef (same embodiment or embodiment_id:frame); receiver_mode is GraspMode | auto.",
+      "required": ["receiver"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the giver's current grasp." },
+        "receiver": { "$ref": "#/$defs/EffectorRef", "description": "EffectorRef — the partner effector (a control frame on the same or another embodiment)." },
+        "receiver_mode": { "$ref": "#/$defs/CompoundOrAuto", "description": "GraspMode | auto — the grasp the receiver should form (default auto = planner-derived)." },
+        "handoff_pose": { "$ref": "#/$defs/CompoundOrAuto", "description": "Pose6D | auto — object pose at which the transfer occurs (default auto = mutually reachable pose)." },
+        "cograsp_force_budget": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — max combined force during the dual-grasp window (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — shared reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length — object pose drift during transfer (default 2 mm)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "TransportCarryParams": {
+      "type": "object",
+      "description": "Parameters of transport.carry (01 § 4.4), precisely typed (approach B) — the ten parameters of the § 4.4 table, no more. motion is required; the rest carry the spec defaults. motion is a MoveSpec (to_pose(P) | trajectory(T)), deferred to an inline object or a reference.",
+      "required": ["motion"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp whose held object is carried." },
+        "motion": { "$ref": "#/$defs/Compound", "description": "MoveSpec — the underlying relocation: to_pose(P) or trajectory(T); carry wraps it with disturbance rejection." },
+        "disturbance_budget": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — the external perturbation the carry must reject without losing the grasp (default auto)." },
+        "stability_margin": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Ratio" } ], "description": "Ratio | auto — required headroom of holding capacity over inertial + disturbance load (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 — on the object relative to motion, looser (disturbances perturb the path) (default 3 mm)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — clamped, conservative under disturbance." },
+        "max_acceleration": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Acceleration" } ], "description": "Acceleration | auto — clamped to leave stability_margin for disturbance rejection." },
+        "contact_response": { "$ref": "#/$defs/ContactResponse", "description": "Reaction to unplanned contact (default comply; carry expects environmental contact)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "TransportLiftParams": {
+      "type": "object",
+      "description": "Parameters of transport.lift (01 § 4.5), precisely typed (approach B) — the nine parameters of the § 4.5 table, no more. height is required; the rest carry the spec defaults. up_direction is a Direction (default -gravity, declared not assumed).",
+      "required": ["height"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "height": { "$ref": "#/$defs/Length", "description": "Length > 0 — vertical lift distance." },
+        "up_direction": { "$ref": "#/$defs/Direction", "description": "Direction — the up direction (default -gravity, declared not assumed)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 (default 2 mm)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — clamped, conservative through load transfer." },
+        "max_acceleration": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Acceleration" } ], "description": "Acceleration | auto — clamped to dynamic-stability limit (full weight engaged)." },
+        "clearance": { "$ref": "#/$defs/Length", "description": "Length >= 0 (default 0) — for object + effector swept volume." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "TransportLowerParams": {
+      "type": ["object", "null"],
+      "description": "Parameters of transport.lower (01 § 4.6), precisely typed (approach B) — the ten parameters of the § 4.6 table, no more. No required parameter (height defaults to auto = until touchdown), so a param-less call (null / empty) is valid. stop_mode chooses fixed-descent vs contact-detected stop; down_direction is a Direction (default gravity).",
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the object." },
+        "stop_mode": { "enum": ["height", "touchdown"], "description": "Stop after a fixed descent, or when surface contact is detected (default touchdown)." },
+        "height": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — (height mode) descent distance (default auto = until touchdown)." },
+        "down_direction": { "$ref": "#/$defs/Direction", "description": "Direction — descent direction (default gravity, declared not assumed)." },
+        "touchdown_force": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — contact force threshold marking touchdown (default auto = small fraction of weight)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 (default 2 mm)." },
+        "approach_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — slow contact-approach speed (soft landing)." },
+        "clearance": { "$ref": "#/$defs/Length", "description": "Length >= 0 (default 0) — for object + effector swept volume (excluding the set-down surface)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForcePushParams": {
+      "type": "object",
+      "description": "Parameters of force.push (01 § 6.2), precisely typed (approach B) — the nine parameters of the § 6.2 table, no more. target + target_force are required; the rest carry the spec defaults. hold_duration is Duration | until (defers to an enclosing reactive).",
+      "required": ["target", "target_force"],
+      "additionalProperties": false,
+      "properties": {
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — the frame / tool applying the force (default the embodiment.default_tool_axis frame)." },
+        "target": { "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "SurfaceTarget — surface to push against (point + inward direction); inline SurfaceTarget or let-reference." },
+        "push_direction": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ], "description": "Direction | auto — direction to apply force (default auto = -target.normal)." },
+        "target_force": { "$ref": "#/$defs/Force", "description": "Force — the contact force to establish and hold." },
+        "max_displacement": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — max allowed target displacement (default auto = small; push, do not move)." },
+        "hold_duration": { "$ref": "#/$defs/HoldDuration", "description": "Duration | until (default until = defer to an enclosing reactive)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForcePullParams": {
+      "type": "object",
+      "description": "Parameters of force.pull (01 § 6.3), precisely typed (approach B) — the eight parameters of the § 6.3 table, no more. pull_direction + force_budget + stop_condition are required; the rest carry the spec defaults. stop_condition is a PullStop (StopCondition family), kept as a deferred StopSpec pending the 01 § 6 formatting pass.",
+      "required": ["pull_direction", "force_budget", "stop_condition"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp on the target being pulled (pulling requires a grip / hook)." },
+        "pull_direction": { "$ref": "#/$defs/Direction", "description": "Direction — direction of tensile force, in frame." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force — max tensile force to apply." },
+        "stop_condition": { "$ref": "#/$defs/PullStop", "description": "PullStop (01 § 317) — reached(distance) | effort_drop (breakaway) | effort_rise(tension)." },
+        "breakaway_response": { "enum": ["arrest", "continue"], "description": "On a sudden resistance drop: stop immediately or keep moving (default arrest)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceScrewParams": {
+      "type": "object",
+      "description": "Parameters of force.screw (01 § 6.4), precisely typed (approach B) — the ten parameters of the § 6.4 table, no more. thread_axis + torque_budget + completion are required; the rest carry the spec defaults. completion is a ScrewStop (StopCondition family, deferred StopSpec). tool_mediated is bool | auto.",
+      "required": ["thread_axis", "torque_budget", "completion"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp on the fastener, or on the tool driving it." },
+        "thread_axis": { "$ref": "#/$defs/Direction", "description": "Direction — the screw / thread axis, in frame." },
+        "torque_budget": { "$ref": "#/$defs/Torque", "description": "Torque — max torque about thread_axis (thread-strip / fastener-break limit)." },
+        "axial_force_budget": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — max axial seating force." },
+        "thread_pitch": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — couples rotation to advance (default auto = from the thread spec)." },
+        "completion": { "$ref": "#/$defs/ScrewStop", "description": "ScrewStop (01 § 318) — effort_rise(torque) | count(turns) | all_of{effort_rise(torque), reached(advance)}." },
+        "tool_mediated": { "anyOf": [ { "type": "boolean" }, { "$ref": "#/$defs/Auto" } ], "description": "bool | auto — whether a held tool transmits the torque (default auto = inferred from grasp)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceUnscrewParams": {
+      "type": "object",
+      "description": "Parameters of force.unscrew (01 § 6.5), precisely typed (approach B) — the ten parameters of the § 6.5 table, no more. thread_axis + torque_budget are required; the rest carry the spec defaults (completion defaults to disengagement, so it is not required). completion is a ScrewStop (deferred StopSpec). tool_mediated is bool | auto.",
+      "required": ["thread_axis", "torque_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp on the fastener, or on the tool driving it." },
+        "thread_axis": { "$ref": "#/$defs/Direction", "description": "Direction — the thread axis, in frame." },
+        "torque_budget": { "$ref": "#/$defs/Torque", "description": "Torque — max loosening torque (tool-strip / fastener-break / break-loose limit)." },
+        "thread_pitch": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — couples reverse rotation to retreat." },
+        "completion": { "$ref": "#/$defs/ScrewStop", "description": "ScrewStop (01 § 318) — effort_rise(torque) | count(turns) | all_of{effort_rise(torque), reached(advance)} (the unscrew effort_drop variant is not typed, per project decision)." },
+        "on_disengagement": { "enum": ["retain", "drop_safe"], "description": "When the fastener frees: keep it gripped, or release into a safe zone (default retain)." },
+        "tool_mediated": { "anyOf": [ { "type": "boolean" }, { "$ref": "#/$defs/Auto" } ], "description": "bool | auto — whether a held tool transmits the torque (default auto)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForcePressButtonParams": {
+      "type": "object",
+      "description": "Parameters of force.press_button (01 § 6.6), precisely typed (approach B) — the ten parameters of the § 6.6 table, no more. target + actuation + force_budget are required; the rest carry the spec defaults. actuation is an ActuationSpec (deferred StopSpec).",
+      "required": ["target", "actuation", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — the frame pressing (fingertip, held stylus, etc.) (default effector / held tool)." },
+        "target": { "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "SurfaceTarget — the button surface (point + press direction); inline SurfaceTarget or let-reference." },
+        "press_direction": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ], "description": "Direction | auto — default auto = -target.normal (into the button)." },
+        "actuation": { "$ref": "#/$defs/ActuationSpec", "description": "ActuationSpec (01 § 319) — detent (rise-then-drop / click) | effort_rise(force_threshold)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force — max press force (over-travel / mechanism-damage limit)." },
+        "max_travel": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Length" } ], "description": "Length | auto — max displacement (over-travel guard) (default auto = small)." },
+        "release_after": { "type": "boolean", "description": "Release the press after actuation (momentary), or hold (default true)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceCutParams": {
+      "type": "object",
+      "description": "Parameters of force.cut (01 § 6.7), precisely typed (approach B) — the ten parameters of the § 6.7 table, no more. cut_path + shear_force_budget + completion are required; the rest carry the spec defaults. cut_path is a Trajectory (deferred Compound); completion is a CutStop (deferred StopSpec). tool_mediated is a plain bool (always true for cut).",
+      "required": ["cut_path", "shear_force_budget", "completion"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp on the cutting tool (cut is tool-mediated)." },
+        "cut_path": { "$ref": "#/$defs/Compound", "description": "Trajectory — the path along which to cut, in frame (bounds exactly where the cut goes)." },
+        "shear_force_budget": { "$ref": "#/$defs/Force", "description": "Force — max shear force (tool-damage / over-cut / kickback limit)." },
+        "completion": { "$ref": "#/$defs/CutStop", "description": "CutStop (01 § 320) — landmark(path_complete) | effort_drop (separation) | reached(depth)." },
+        "feed_rate": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — tool advance speed along the path." },
+        "on_separation": { "enum": ["retain", "drop_safe"], "description": "Handling of the freed (cut-off) part (default retain)." },
+        "tool_mediated": { "type": "boolean", "description": "Always true for cut (a cutting tool is used) (default true)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceWipeParams": {
+      "type": "object",
+      "description": "Parameters of force.wipe (01 § 6.8), precisely typed (approach B) — the ten parameters of the § 6.8 table, no more. surface + wipe_path + normal_force are required; the rest carry the spec defaults. wipe_path is a Trajectory (deferred Compound).",
+      "required": ["surface", "wipe_path", "normal_force"],
+      "additionalProperties": false,
+      "properties": {
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — the frame in contact (fingertip, held cloth / tool) (default effector / held tool)." },
+        "surface": { "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "SurfaceTarget — the surface to wipe over; inline SurfaceTarget or let-reference." },
+        "wipe_path": { "$ref": "#/$defs/Compound", "description": "Trajectory — the tangential path along the surface, in frame." },
+        "normal_force": { "$ref": "#/$defs/Force", "description": "Force — the contact force to maintain normal to the surface." },
+        "normal_force_tolerance": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — allowed deviation of the maintained normal force." },
+        "feed_rate": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — tangential speed along the path." },
+        "contour_following": { "type": "boolean", "description": "Accommodate surface height variation to hold normal force (default true)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (normal-direction compliance is essential) (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceScrubParams": {
+      "type": "object",
+      "description": "Parameters of force.scrub (01 § 6.9), precisely typed (approach B) — the eleven parameters of the § 6.9 table, no more. surface + normal_force + amplitude + completion are required; the rest carry the spec defaults. region is a ScanRegion | auto; completion is a ScrubStop (deferred StopSpec).",
+      "required": ["surface", "normal_force", "amplitude", "completion"],
+      "additionalProperties": false,
+      "properties": {
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — the frame in contact (held pad / abrasive / fingertip) (default effector / held tool)." },
+        "surface": { "anyOf": [ { "$ref": "#/$defs/SurfaceTarget" }, { "$ref": "#/$defs/Ref" } ], "description": "SurfaceTarget — the surface to scrub; inline SurfaceTarget or let-reference." },
+        "region": { "$ref": "#/$defs/CompoundOrAuto", "description": "ScanRegion | auto — the area to cover (default auto = the local contact region)." },
+        "normal_force": { "$ref": "#/$defs/Force", "description": "Force — regulated contact force normal to the surface." },
+        "amplitude": { "$ref": "#/$defs/Length", "description": "Length — tangential oscillation amplitude." },
+        "frequency": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Frequency" } ], "description": "Frequency | auto — oscillation frequency; clamped to embodiment.limits.oscillation_max." },
+        "completion": { "$ref": "#/$defs/ScrubStop", "description": "ScrubStop (01 § 321) — elapsed(duration) | count(passes) | predicate(state_change)." },
+        "normal_force_tolerance": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — allowed normal-force deviation." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceSnapEngageParams": {
+      "type": "object",
+      "description": "Parameters of force.snap_engage (01 § 6.10), precisely typed (approach B) — the nine parameters of the § 6.10 table, no more. mate_feature + engage_direction + force_budget are required; the rest carry the spec defaults (snap_signature defaults to detent). snap_signature is an ActuationSpec (deferred StopSpec).",
+      "required": ["mate_feature", "engage_direction", "force_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp on the part being snapped into place." },
+        "mate_feature": { "$ref": "#/$defs/Compound", "description": "FeatureRef — the bistable mechanism / receptacle to engage." },
+        "engage_direction": { "$ref": "#/$defs/Direction", "description": "Direction — direction to drive engagement, in frame." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force — max engagement force (mechanism-break / over-force limit, above the expected snap peak)." },
+        "snap_signature": { "$ref": "#/$defs/ActuationSpec", "description": "ActuationSpec (01 § 319) — detent (default, rise-then-drop) | effort_rise(force_threshold)." },
+        "confirm_held": { "type": "boolean", "description": "Verify the bistable connection holds after engagement (release-test) (default true)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Required compliance mode (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ReachRetractParams": {
+      "type": "object",
+      "description": "Parameters of reach.retract (01 § 1.4, post-reconciliation), precisely typed (approach B) — the ten parameters of the § 1.4 table, no more. distance is required; the rest carry the spec defaults. direction is a Direction (a signed axis such as -tool_axis, or a unit vector; default the reverse of the tool axis) — the reference's task-level spelling, reconciled from the former retract_axis: SignedAxis.",
+      "required": ["distance"],
+      "additionalProperties": false,
+      "properties": {
+        "distance": { "$ref": "#/$defs/Length", "description": "Length > 0 — retreat travel along direction." },
+        "controlled_frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — declared control frame (default embodiment.default_control_frame)." },
+        "direction": { "$ref": "#/$defs/Direction", "description": "Direction — retreat direction (default -tool_axis)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — frame the axis is expressed in (default controlled_frame)." },
+        "break_contact": { "type": "boolean", "description": "Require any starting contact to be cleared (default true)." },
+        "position_tolerance": { "$ref": "#/$defs/Length", "description": "Length > 0 (default 2 mm)." },
+        "max_velocity": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Velocity" } ], "description": "Velocity | auto — clamped to embodiment.limits.v_cartesian_max." },
+        "clearance": { "$ref": "#/$defs/Length", "description": "Length >= 0 (default 0) — margin to the full static model (no target exclusion)." },
+        "contact_response": { "$ref": "#/$defs/ContactResponse", "description": "Reaction to a force increase during retreat (default abort)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "ForceInsertFitParams": {
+      "type": "object",
+      "description": "Parameters of force.insert_fit (01 § 6.1, post-reconciliation), precisely typed (approach B) — the ten parameters of the § 6.1 table, no more. target_fit + force_budget + stop_condition are required; the rest carry the spec defaults. stop_condition is a precise StopCondition (the unified family); force_budget and stop_condition are the reference's task-level spelling, reconciled from the former axial_force_budget and seating_condition: SeatingSpec. insertion_axis is now Direction | auto.",
+      "required": ["target_fit", "force_budget", "stop_condition"],
+      "additionalProperties": false,
+      "properties": {
+        "grasp_handle": { "$ref": "#/$defs/GraspHandle", "description": "GraspRef | active (default active) — the grasp holding the part being inserted." },
+        "target_fit": { "$ref": "#/$defs/Compound", "description": "FeatureRef — the hole / socket / receptacle (tolerance fit)." },
+        "insertion_axis": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Direction" } ], "description": "Direction | auto — nominal insertion direction (default auto = planner-derived from target_fit)." },
+        "force_budget": { "$ref": "#/$defs/Force", "description": "Force — max force along insertion_axis (over-insertion / pin-damage limit)." },
+        "lateral_force_budget": { "anyOf": [ { "$ref": "#/$defs/Auto" }, { "$ref": "#/$defs/Force" } ], "description": "Force | auto — max lateral force during search (cocking / side-load limit)." },
+        "stop_condition": { "$ref": "#/$defs/SeatingSpec", "description": "SeatingSpec (01 § 316) — effort_rise(F) | reached(depth) | all_of{effort_rise(F), reached(depth)}; the conjunction is the seating/jam discriminator." },
+        "search_strategy": { "enum": ["spiral", "tilt", "hop", "auto"], "description": "Compliant-search pattern to find alignment (default auto)." },
+        "compliance": { "$ref": "#/$defs/Compliance", "description": "Compliance mode required for the fit (default auto)." },
+        "frame": { "$ref": "#/$defs/FrameRef", "description": "FrameRef — reference frame (default task)." },
+        "timeout": { "$ref": "#/$defs/Duration", "description": "Duration | auto, > 0." }
+      }
+    },
+    "Composition": {
+      "description": "A node of the compositional algebra (01 § Compositional algebra). Exactly one of: a primitive call, an extension call, or one of the combinators sequence / parallel / reactive / repeat / branch / let-bind. The forms are disjoint by key namespace, so a well-formed node matches exactly one.",
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/PrimitiveCall" },
+        { "$ref": "#/$defs/ExtensionCall" },
+        { "$ref": "#/$defs/Sequence" },
+        { "$ref": "#/$defs/Parallel" },
+        { "$ref": "#/$defs/Reactive" },
+        { "$ref": "#/$defs/Repeat" },
+        { "$ref": "#/$defs/Branch" },
+        { "$ref": "#/$defs/LetBind" }
+      ]
+    },
+    "PrimitiveCall": {
+      "type": "object",
+      "description": "A core primitive invocation: a single key that is a PrimitiveId, mapping to its params (BNF Primitive ::= PrimitiveId \"(\" ParamList? \")\"). Most primitives' params are an open object (#/$defs/Params); primitives precisely typed so far (approach B) additionally constrain their params via the conditional clauses in allOf. The open floor and the matching typed clause both apply to the same key, so the typed schema is what binds for those primitives; one if/then clause is added per primitive as the typing proceeds.",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/PrimitiveId" },
+      "additionalProperties": { "$ref": "#/$defs/Params" },
+      "allOf": [
+        {
+          "if": { "required": ["grasp.pinch"] },
+          "then": { "properties": { "grasp.pinch": { "$ref": "#/$defs/GraspPinchParams" } } }
+        },
+        {
+          "if": { "required": ["sense.locate"] },
+          "then": { "properties": { "sense.locate": { "$ref": "#/$defs/SenseLocateParams" } } }
+        },
+        {
+          "if": { "required": ["transport.move_to_pose"] },
+          "then": { "properties": { "transport.move_to_pose": { "$ref": "#/$defs/TransportMoveToPoseParams" } } }
+        },
+        {
+          "if": { "required": ["reach.align"] },
+          "then": { "properties": { "reach.align": { "$ref": "#/$defs/ReachAlignParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.release"] },
+          "then": { "properties": { "grasp.release": { "$ref": "#/$defs/GraspReleaseParams" } } }
+        },
+        {
+          "if": { "required": ["reach.to_pose"] },
+          "then": { "properties": { "reach.to_pose": { "$ref": "#/$defs/ReachToPoseParams" } } }
+        },
+        {
+          "if": { "required": ["reach.approach"] },
+          "then": { "properties": { "reach.approach": { "$ref": "#/$defs/ReachApproachParams" } } }
+        },
+        {
+          "if": { "required": ["reach.hover"] },
+          "then": { "properties": { "reach.hover": { "$ref": "#/$defs/ReachHoverParams" } } }
+        },
+        {
+          "if": { "required": ["reach.scan"] },
+          "then": { "properties": { "reach.scan": { "$ref": "#/$defs/ReachScanParams" } } }
+        },
+        {
+          "if": { "required": ["sense.probe"] },
+          "then": { "properties": { "sense.probe": { "$ref": "#/$defs/SenseProbeParams" } } }
+        },
+        {
+          "if": { "required": ["sense.inspect"] },
+          "then": { "properties": { "sense.inspect": { "$ref": "#/$defs/SenseInspectParams" } } }
+        },
+        {
+          "if": { "required": ["sense.weigh"] },
+          "then": { "properties": { "sense.weigh": { "$ref": "#/$defs/SenseWeighParams" } } }
+        },
+        {
+          "if": { "required": ["sense.verify"] },
+          "then": { "properties": { "sense.verify": { "$ref": "#/$defs/SenseVerifyParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.power"] },
+          "then": { "properties": { "grasp.power": { "$ref": "#/$defs/GraspPowerParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.hook"] },
+          "then": { "properties": { "grasp.hook": { "$ref": "#/$defs/GraspHookParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.precision_tripod"] },
+          "then": { "properties": { "grasp.precision_tripod": { "$ref": "#/$defs/GraspPrecisionTripodParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.lateral"] },
+          "then": { "properties": { "grasp.lateral": { "$ref": "#/$defs/GraspLateralParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.platform"] },
+          "then": { "properties": { "grasp.platform": { "$ref": "#/$defs/GraspPlatformParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.pin"] },
+          "then": { "properties": { "grasp.pin": { "$ref": "#/$defs/GraspPinParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.envelope"] },
+          "then": { "properties": { "grasp.envelope": { "$ref": "#/$defs/GraspEnvelopeParams" } } }
+        },
+        {
+          "if": { "required": ["grasp.adjust"] },
+          "then": { "properties": { "grasp.adjust": { "$ref": "#/$defs/GraspAdjustParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.rotate"] },
+          "then": { "properties": { "in_hand.rotate": { "$ref": "#/$defs/InHandRotateParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.translate"] },
+          "then": { "properties": { "in_hand.translate": { "$ref": "#/$defs/InHandTranslateParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.regrasp"] },
+          "then": { "properties": { "in_hand.regrasp": { "$ref": "#/$defs/InHandRegraspParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.roll"] },
+          "then": { "properties": { "in_hand.roll": { "$ref": "#/$defs/InHandRollParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.pivot"] },
+          "then": { "properties": { "in_hand.pivot": { "$ref": "#/$defs/InHandPivotParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.slide"] },
+          "then": { "properties": { "in_hand.slide": { "$ref": "#/$defs/InHandSlideParams" } } }
+        },
+        {
+          "if": { "required": ["in_hand.flip"] },
+          "then": { "properties": { "in_hand.flip": { "$ref": "#/$defs/InHandFlipParams" } } }
+        },
+        {
+          "if": { "required": ["place.put_down"] },
+          "then": { "properties": { "place.put_down": { "$ref": "#/$defs/PlacePutDownParams" } } }
+        },
+        {
+          "if": { "required": ["place.stack"] },
+          "then": { "properties": { "place.stack": { "$ref": "#/$defs/PlaceStackParams" } } }
+        },
+        {
+          "if": { "required": ["place.insert_loose"] },
+          "then": { "properties": { "place.insert_loose": { "$ref": "#/$defs/PlaceInsertLooseParams" } } }
+        },
+        {
+          "if": { "required": ["place.orient"] },
+          "then": { "properties": { "place.orient": { "$ref": "#/$defs/PlaceOrientParams" } } }
+        },
+        {
+          "if": { "required": ["place.hand_to"] },
+          "then": { "properties": { "place.hand_to": { "$ref": "#/$defs/PlaceHandToParams" } } }
+        },
+        {
+          "if": { "required": ["place.discard"] },
+          "then": { "properties": { "place.discard": { "$ref": "#/$defs/PlaceDiscardParams" } } }
+        },
+        {
+          "if": { "required": ["transport.follow_trajectory"] },
+          "then": { "properties": { "transport.follow_trajectory": { "$ref": "#/$defs/TransportFollowTrajectoryParams" } } }
+        },
+        {
+          "if": { "required": ["transport.handoff"] },
+          "then": { "properties": { "transport.handoff": { "$ref": "#/$defs/TransportHandoffParams" } } }
+        },
+        {
+          "if": { "required": ["transport.carry"] },
+          "then": { "properties": { "transport.carry": { "$ref": "#/$defs/TransportCarryParams" } } }
+        },
+        {
+          "if": { "required": ["transport.lift"] },
+          "then": { "properties": { "transport.lift": { "$ref": "#/$defs/TransportLiftParams" } } }
+        },
+        {
+          "if": { "required": ["transport.lower"] },
+          "then": { "properties": { "transport.lower": { "$ref": "#/$defs/TransportLowerParams" } } }
+        },
+        {
+          "if": { "required": ["force.push"] },
+          "then": { "properties": { "force.push": { "$ref": "#/$defs/ForcePushParams" } } }
+        },
+        {
+          "if": { "required": ["force.pull"] },
+          "then": { "properties": { "force.pull": { "$ref": "#/$defs/ForcePullParams" } } }
+        },
+        {
+          "if": { "required": ["force.screw"] },
+          "then": { "properties": { "force.screw": { "$ref": "#/$defs/ForceScrewParams" } } }
+        },
+        {
+          "if": { "required": ["force.unscrew"] },
+          "then": { "properties": { "force.unscrew": { "$ref": "#/$defs/ForceUnscrewParams" } } }
+        },
+        {
+          "if": { "required": ["force.press_button"] },
+          "then": { "properties": { "force.press_button": { "$ref": "#/$defs/ForcePressButtonParams" } } }
+        },
+        {
+          "if": { "required": ["force.cut"] },
+          "then": { "properties": { "force.cut": { "$ref": "#/$defs/ForceCutParams" } } }
+        },
+        {
+          "if": { "required": ["force.wipe"] },
+          "then": { "properties": { "force.wipe": { "$ref": "#/$defs/ForceWipeParams" } } }
+        },
+        {
+          "if": { "required": ["force.scrub"] },
+          "then": { "properties": { "force.scrub": { "$ref": "#/$defs/ForceScrubParams" } } }
+        },
+        {
+          "if": { "required": ["force.snap_engage"] },
+          "then": { "properties": { "force.snap_engage": { "$ref": "#/$defs/ForceSnapEngageParams" } } }
+        },
+        {
+          "if": { "required": ["reach.retract"] },
+          "then": { "properties": { "reach.retract": { "$ref": "#/$defs/ReachRetractParams" } } }
+        },
+        {
+          "if": { "required": ["force.insert_fit"] },
+          "then": { "properties": { "force.insert_fit": { "$ref": "#/$defs/ForceInsertFitParams" } } }
+        }
+      ]
+    },
+    "ExtensionCall": {
+      "type": "object",
+      "description": "An extension primitive invocation (BNF Extension ::= \"ext\" \".\" Identifier \".\" Identifier ...). The id is ext.<namespace>.<name>; the registry (06-extension-registry.md) owns the namespace, not this schema.",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": { "type": "string", "pattern": "^ext\\.[a-z_]+\\.[a-z_]+$" },
+      "additionalProperties": { "$ref": "#/$defs/Params" }
+    },
+    "Sequence": {
+      "type": "object",
+      "description": "Ordered composition: each child runs to completion before the next (BNF Sequence). A let-bind child binds a name visible to the children that follow it in the same sequence.",
+      "required": ["sequence"],
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Composition" }
+        }
+      }
+    },
+    "Parallel": {
+      "type": "object",
+      "description": "Concurrent composition of two or more branches (BNF Parallel).",
+      "required": ["parallel"],
+      "additionalProperties": false,
+      "properties": {
+        "parallel": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/Composition" }
+        }
+      }
+    },
+    "Reactive": {
+      "type": "object",
+      "description": "Run a body until a predicate confirms true (BNF Reactive ::= \"reactive\" \"(\" Composition \",\" \"until\" \"(\" Predicate \")\" \")\"). Per 01 § three-valued control flow the body terminates only on a confident true; a concurrent envelope violation takes precedence over a clean until completion.",
+      "required": ["reactive"],
+      "additionalProperties": false,
+      "properties": {
+        "reactive": {
+          "type": "object",
+          "required": ["body", "until"],
+          "additionalProperties": false,
+          "properties": {
+            "body": { "$ref": "#/$defs/Composition" },
+            "until": { "$ref": "#/$defs/Predicate" }
+          }
+        }
+      }
+    },
+    "Repeat": {
+      "type": "object",
+      "description": "Repeat a body a fixed count or until satisfied (BNF Repeat ::= \"repeat\" \"(\" Composition \",\" Count \")\", Count ::= Integer | \"until_satisfied\").",
+      "required": ["repeat"],
+      "additionalProperties": false,
+      "properties": {
+        "repeat": {
+          "type": "object",
+          "required": ["body", "count"],
+          "additionalProperties": false,
+          "properties": {
+            "body": { "$ref": "#/$defs/Composition" },
+            "count": {
+              "oneOf": [
+                { "type": "integer", "minimum": 1 },
+                { "const": "until_satisfied" }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "Branch": {
+      "type": "object",
+      "description": "Three-valued conditional (BNF Branch). then / else are taken on a confident true / false; the optional unknown arm is taken on indeterminate, and without it an indeterminate predicate escalates rather than guessing (01 § three-valued control flow).",
+      "required": ["branch"],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "object",
+          "required": ["predicate", "then", "else"],
+          "additionalProperties": false,
+          "properties": {
+            "predicate": { "$ref": "#/$defs/Predicate" },
+            "then": { "$ref": "#/$defs/Composition" },
+            "else": { "$ref": "#/$defs/Composition" },
+            "unknown": { "$ref": "#/$defs/Composition" }
+          }
+        }
+      }
+    },
+    "LetBind": {
+      "type": "object",
+      "description": "Hoist a planner-derived value (typically a sense.* result) for reuse (BNF LetBind ::= \"let\" \"(\" Identifier \":=\" Expression \")\" \"in\" \"(\" Composition \")\"). Concrete YAML form: a {let, from} statement whose binding scopes over the rest of the enclosing sequence; the BNF's explicit in(...) is accepted as the optional in key. Downstream uncertainty / measured-value flow checks are owned by 01 § LetBind flow checks, not this schema.",
+      "required": ["let", "from"],
+      "additionalProperties": false,
+      "properties": {
+        "let": {
+          "type": "string",
+          "description": "The bound identifier; later primitives reference its value by name."
+        },
+        "from": {
+          "$ref": "#/$defs/Composition",
+          "description": "The expression whose result is bound (typically a sense.* primitive call)."
+        },
+        "in": {
+          "$ref": "#/$defs/Composition",
+          "description": "Optional explicit scope (BNF in(...)); omitted when the binding scopes over the rest of the enclosing sequence."
+        }
+      }
+    },
+    "Predicate": {
+      "type": "object",
+      "description": "A predicate of the algebra (BNF Predicate), consumed by reactive (until) and branch. A single key naming the predicate kind, mapping to its (here unconstrained) argument. value / confidence / evidence verdict semantics are owned by 01 § Predicates, verdicts, and three-valued control flow.",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "tactile_contact",
+          "pose_reached",
+          "force_exceeds",
+          "object_present",
+          "elapsed",
+          "user_defined"
+        ]
+      }
+    }
+  }
+}
