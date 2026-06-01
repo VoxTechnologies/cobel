@@ -41,19 +41,23 @@ def main() -> int:
     rows: list[Row] = []
     for task_name in TASKS:
         task, scene = load_task(ROOT / "tasks" / f"{task_name}.yaml")
-        passes, best_skill = 0, None
+        passes, best_skill, first_error = 0, None, ""
         for _ in range(args.samples):
             skill = planner.plan(task, scene)
-            if schema_ok(skill).ok:
+            r = schema_ok(skill)
+            if r.ok:
                 passes += 1
                 best_skill = best_skill or skill
+            elif not first_error:
+                first_error = r.error
         retarget: dict[str, str] = {}
         if best_skill is not None:
             for dname, dyaml in DESCRIPTORS.items():
                 retarget[dname] = retarget_outcome(best_skill, dyaml).kind
         rows.append(
             Row(task=task_name, mode=args.mode, schema_ok=passes > 0,
-                retarget=retarget, n=args.samples, schema_pass=passes)
+                retarget=retarget, n=args.samples, schema_pass=passes,
+                schema_error=first_error)
         )
 
     md = f"# cobel results — planner={args.planner} mode={args.mode} samples={args.samples}\n\n"

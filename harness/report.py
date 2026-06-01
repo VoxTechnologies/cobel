@@ -15,6 +15,7 @@ class Row:
     retarget: dict[str, str] = field(default_factory=dict)  # descriptor -> outcome kind
     n: int = 1                            # samples drawn
     schema_pass: int = 1                  # samples that passed schema (for pass@k)
+    schema_error: str = ""                # first failing sample's schema error (if any)
 
 
 def render_tables(rows: list[Row]) -> str:
@@ -37,4 +38,9 @@ def render_tables(rows: list[Row]) -> str:
     for r in rows:
         cells = " | ".join(r.retarget.get(d, "-") for d in descriptors)
         out.append(f"| {r.task} | {r.mode} | {cells} |")
+
+    notes = [(r.task, r.schema_error) for r in rows if r.schema_error]
+    if notes:
+        out += ["\n## Notes — schema-failure reasons (first failing sample)\n"]
+        out += [f"- **{task}**: {err}" for task, err in notes]
     return "\n".join(out) + "\n"
