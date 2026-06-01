@@ -1,9 +1,13 @@
-# Trossen PincherX-100 — open-chain 4-DOF arm, single parallel gripper, no tactile/F-T sensing.
-# RFL embodiment descriptor (rfl/schemas/embodiment-descriptor.schema.json). Hardware facts are
-# WebFetch-verified (Trossen px100 spec page + ROBOTIS XL430-W250 + interbotix px100 config,
-# 2026-06-01). Values marked "v0-reference" are documented engineering estimates for this
-# sim-first proof, to be CALIBRATED AT BRINGUP against the installed interbotix_xsarm config
-# (joint_limits.yaml + URDF ee_gripper_link) + a grip-force measurement.
+# Trossen Interbotix PincherX-100 — 4-DOF open-chain arm, single parallel gripper, no F/T.
+# Authored for cobel from the PUBLIC vendor specifications (WebFetch-verified 2026-06-01):
+#   docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/px100.html
+#   DOF 4 / reach 300mm / span 600mm / repeatability 5mm / accuracy 8mm / payload 50g /
+#   5x DYNAMIXEL XL430-W250 / gripper 30-74mm / no force-torque or tactile sensing.
+# Declares only [grasp.pinch, transport, sense.locate] + the reach baseline; with no tactile
+# the grasp confirms at the proxy tier. The negative space (no force.*, no other grasp modes,
+# no transport.carry) is the point: a low-end arm the capability gate honestly limits.
+# grip_force_max / v_grasp are v0 reference values from the XL430-W250 spec — calibrate on
+# real hardware.
 embodiment:
   id: pincherx-100
   class: open-chain-4dof-arm
@@ -12,34 +16,27 @@ embodiment:
     control_frames: [ee_gripper]
     role_defaults:
       grasp:  ee_gripper
-      sensor: ee_cam              # ee_cam is a NOTIONAL camera for kinematic scan warm-up
-                                  # (the physical arm has no camera); FOV parameterises raster
-                                  # density but makes no perception claim
-    tool_axis: { ee_gripper: +z } # v0-reference; CONFIRM at bringup from URDF ee_gripper_link
+      sensor: ee_cam              # notional camera: parameterises reach.scan FOV, no perception claim
+    tool_axis: { ee_gripper: +z }
 
   capabilities:
     skills: [grasp.pinch, transport, sense.locate]
-    # tactile_sensing OMITTED → proxy-tier confirmation (spec/04). Negative space (in_hand.* /
-    # force.* / the other 7 grasp modes / transport.carry / sense.inspect) deliberately undeclared.
+    # tactile_sensing omitted -> grasp.pinch confirms at the proxy tier (no F/T on this arm).
 
   limits:
     v_cartesian_max:        0.2 m/s
     w_cartesian_max:        1.0 rad/s
     a_cartesian_max:        0.5 m/s^2
-    joint_velocity_ceiling: 3.0 rad/s    # grounded: interbotix px100 Velocity_Limit 131 ≈ 30 rev/min ≈ 3.14 rad/s
-    stop_time:              0.2 s         # v0-reference; calibrate at bringup
-    tracking_bandwidth:     2 Hz          # v0-reference; calibrate at bringup
-    grip_force_max:         10 N          # v0-reference (XL430-W250 stall 1.4 N·m @ 11.1 V via gripper pinion); >> ~1 N min_holding_force; MEASURE at bringup
-    v_grasp:                0.03 m/s      # v0-reference (XL430-W250 no-load 57 rev/min @ 11.1 V); calibrate at bringup
-    payload_grasp_pinch:    0.5 N         # = verified 50 g working payload
+    joint_velocity_ceiling: 3.0 rad/s     # Interbotix px100 Velocity_Limit 131 ~= 3.0 rad/s
+    stop_time:              0.2 s
+    tracking_bandwidth:     2 Hz
+    grip_force_max:         10 N           # XL430-W250 @ 11.1 V via gripper pinion (reference); >> ~1 N needed for 50 g
+    v_grasp:                0.03 m/s
+    payload_grasp_pinch:    0.5 N          # 50 g working payload * g ~= 0.49 N
 
-  # Non-contact sensor descriptor — NOTIONAL entry to satisfy reach.scan's FOV requirement.
-  # The PincherX-100 ships with no camera; this entry exists solely so the Σ generator has a
-  # field of view to compute raster station density. Replace or remove at bringup if a real
-  # camera is not attached.
   sensors:
     ee_cam:
       bore_axis: +z
       fov: { h_angle: 60 deg, v_angle: 45 deg }
-      working_range: [0.05 m, 1.0 m]
+      working_range: [0.05 m, 0.8 m]
       modalities: [presence, pose]
