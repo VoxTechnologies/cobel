@@ -13,11 +13,11 @@
 
 ## (b) Retarget outcomes (engine-coverage map)
 
-| task | mode | allegro | leap | pneumatic-6f |
-|---|---|---|---|---|
-| latch-buckle | spec-only | capability_rejected | capability_rejected | capability_rejected |
-| pour | spec-only | beyond_engine | beyond_engine | beyond_engine |
-| relocate-part | spec-only | retarget_ok | retarget_ok | retarget_ok |
-| seat-fuse | spec-only | retarget_ok | retarget_ok | retarget_ok |
-| sort-by-weight | spec-only | beyond_engine | beyond_engine | beyond_engine |
-| stack-blocks | spec-only | beyond_engine | beyond_engine | beyond_engine |
+| task | mode | allegro | leap | pincherx-100 | pneumatic-6f |
+|---|---|---|---|---|---|
+| latch-buckle | spec-only | capability_rejected | capability_rejected | capability_rejected | capability_rejected |
+| pour | spec-only | beyond_engine | beyond_engine | beyond_engine | beyond_engine |
+| relocate-part | spec-only | retarget_ok | retarget_ok | retarget_ok | retarget_ok |
+| seat-fuse | spec-only | retarget_ok | retarget_ok | capability_rejected | retarget_ok |
+| sort-by-weight | spec-only | beyond_engine | beyond_engine | beyond_engine | beyond_engine |
+| stack-blocks | spec-only | beyond_engine | beyond_engine | beyond_engine | beyond_engine |
