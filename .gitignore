@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Implementation plans are LOCAL-ONLY — never committed (see CLAUDE.md / rfl design doc)
+docs/plans/
+
+# Secrets / env
+.env
+.env.*
+*.key
+credentials*
+
+# OS
+.DS_Store
