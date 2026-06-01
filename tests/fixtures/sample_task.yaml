@@ -1,0 +1,9 @@
+task:
+  instruction: "Move the part to the tray."
+  success_criteria: "part resting on the tray"
+scene:
+  objects:
+    - { ref: part, kind: small_rigid, est_mass: 1.0 N, features: [graspable_face] }
+    - { ref: tray, kind: surface }
+  frames: [world, tray]
+  notes: "part starts in the bin ~120 mm from the tray"
