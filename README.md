@@ -16,6 +16,29 @@ measured pass rate (`pass@1` / `pass@k`, spec-only vs few-shot). It does **not**
 action-token VLAs (π0 / OpenVLA / Octo) emit RFL — those operate below the Skill ISA; the ISA's
 natural emitter is the planner / VLM tier.
 
+## How it works
+
+```mermaid
+flowchart TD
+    TS["Task + Scene<br/>(no embodiment; Principle 1)"]
+    P["Planner.plan()<br/>mock / claude-opus-4-8"]
+    SK["skill_yaml<br/>(Skill ISA)"]
+    G1["[1] Schema gate<br/>full 50-primitive skill-isa.schema.json"]
+    OK["schema_ok (PRIMARY metric)"]
+    G2["[2] rfl.retarget(skill, descriptor)<br/>published binding, per embodiment"]
+    O["retarget_ok / capability_rejected /<br/>beyond_engine / malformed"]
+
+    TS --> P --> SK
+    SK -->|primary| G1 --> OK
+    SK -->|secondary| G2 --> O
+```
+
+The same `Planner` interface backs both the offline mock (the CI gate) and the real
+`claude-opus-4-8` emitter, so the proof is a one-flag swap (`--planner mock|claude`). The model
+never sees the embodiment; the descriptor enters only at retarget. Schema-validity is the
+headline metric (it does not depend on engine coverage); retarget is a secondary, four-valued
+check bounded by how many of the 50 primitives the reference engine implements.
+
 ## Layout
 
 - `planner/` — the planner-adapter contract + a deterministic mock + a real Claude emitter
