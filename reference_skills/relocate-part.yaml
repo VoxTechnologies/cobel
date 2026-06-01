@@ -1,0 +1,21 @@
+skill: relocate-part
+description: >
+  Locate a small part, pinch-grasp it, carry it to a staging tray, release, and retract.
+  Embodiment-agnostic; all quantities are task-level (Principle 1).
+objects:
+  part: { ref: part, estimated_mass: 1.0 N }
+  tray: { ref: tray }
+body:
+  sequence:
+    - let: part_t
+      from:
+        sense.locate: { target_ref: part, modality: auto }
+    - grasp.pinch:
+        target: part_t
+        force_budget: 6 N
+        tactile_target: auto
+        slip_response: retighten
+    - transport.move_to_pose:
+        target_pose: { frame: tray, offset: { along: +z, distance: 40 mm } }
+    - grasp.release: { grasp_handle: active }
+    - reach.retract: { direction: -tool_axis, distance: 50 mm }

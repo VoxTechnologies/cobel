@@ -1,0 +1,9 @@
+task:
+  instruction: "Pick the part out of the bin and place it on the staging tray, then back away."
+  success_criteria: "part resting on the tray; arm retracted clear"
+scene:
+  objects:
+    - { ref: part, kind: small_rigid, est_mass: 1.0 N, features: [graspable_face] }
+    - { ref: tray, kind: surface }
+  frames: [world, tray]
+  notes: "part in the bin ~120 mm from the tray; both within reach"
