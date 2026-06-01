@@ -1,0 +1,45 @@
+name: CI
+
+# Offline test run: builds the published RFL binding from the (public) rfl repo and runs
+# the full pytest suite. The Claude emitter tests use a fake client, so no API key is
+# needed — the whole suite is hermetic.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cobel
+        uses: actions/checkout@v4
+        with:
+          path: cobel
+
+      - name: Checkout rfl (the neutral standard — public)
+        uses: actions/checkout@v4
+        with:
+          repository: robotfoundationlayer/rfl
+          path: rfl
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cobel + build the rfl binding
+        working-directory: cobel
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          # maturin build-backend builds the abi3 wheel from the rfl checkout (sibling dir).
+          pip install ../rfl/bindings/python
+
+      - name: Run tests (offline — no ANTHROPIC_API_KEY)
+        working-directory: cobel
+        run: python -m pytest -q
