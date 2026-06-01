@@ -21,6 +21,10 @@ import yaml
 from planner.contract import Scene, TaskSpec
 
 _PROMPT = (Path(__file__).parent / "prompts" / "skill-isa-system.md").read_text()
+# The exact validity contract the emission must satisfy — the machine-readable spec. Giving
+# the model the full schema (not worked example skills) is the fair "spec-only" test: it is
+# the complete contract, identical for every task, and still blind (no example skill).
+_SCHEMA = (Path(__file__).parents[1] / "harness" / "schema" / "skill-isa.schema.json").read_text()
 _MODEL = "claude-opus-4-8"
 _FENCE = re.compile(r"```(?:ya?ml)?\s*(.*?)\s*```", re.DOTALL)
 
@@ -80,9 +84,20 @@ class ClaudePlanner:
         self.client = client
 
     def _system(self) -> list[dict]:
-        # Cache the large, stable spec prompt across every task (prefix-stable).
+        # Cache the large, stable spec prompt + the full JSON schema (the exact validity
+        # contract) across every task (prefix-stable -> cache hits after the first call).
         blocks = [
-            {"type": "text", "text": _PROMPT, "cache_control": {"type": "ephemeral"}}
+            {"type": "text", "text": _PROMPT, "cache_control": {"type": "ephemeral"}},
+            {
+                "type": "text",
+                "text": (
+                    "# The exact JSON Schema your YAML must validate against "
+                    "(Draft 2020-12). Match required fields, enums, units, and the closed "
+                    "(additionalProperties:false) parameter objects exactly.\n\n"
+                    f"```json\n{_SCHEMA}\n```"
+                ),
+                "cache_control": {"type": "ephemeral"},
+            },
         ]
         if self.mode == "few-shot":
             anchor = _FEWSHOT_ANCHOR.read_text()

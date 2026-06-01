@@ -43,5 +43,13 @@ def test_plan_builds_messages_and_returns_yaml():
     assert client.captured["model"]  # a model id was set
     blob = str(client.captured["messages"])
     assert "staging tray" in blob or "tray" in blob  # the task/scene reached the user message
-    # spec-only must not inject a worked example skill
-    assert "cable-insertion" not in str(client.captured)
+    # spec-only must not inject the few-shot example-skill anchor (it may include the JSON
+    # schema, whose prose references the example name — that is the contract, not an example).
+    assert "Format anchor" not in str(client.captured["system"])
+
+
+def test_few_shot_adds_the_example_anchor():
+    task, scene = load_task(ROOT / "tasks" / "relocate-part.yaml")
+    client = _FakeClient()
+    ClaudePlanner(mode="few-shot", client=client).plan(task, scene)
+    assert "Format anchor" in str(client.captured["system"])
