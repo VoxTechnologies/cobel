@@ -57,11 +57,14 @@ def retarget_outcome(skill_yaml: str, descriptor_yaml: str) -> Outcome:
         return Outcome("retarget_ok", f"{len(jsonl.splitlines())} action(s)")
     except rfl.RetargetError as exc:
         msg = str(exc)
-        if "capability_absent" in msg:
-            return Outcome("capability_rejected", msg)
-        # Separate engine coverage gaps from genuine emission errors: a primitive
-        # outside the engine's implemented set fails because the engine is incomplete,
-        # not because the model erred.
+        # Engine-coverage gaps take precedence over the embodiment-mismatch path. A skill
+        # using any primitive outside the engine's implemented set cannot be lowered by ANY
+        # descriptor, and rfl reports that as capability_absent for the unimplemented
+        # primitive itself — that is a coverage gap (beyond_engine, NOT a model error), not a
+        # genuine capability rejection. Only skills built purely from ENGINE_18 that a
+        # descriptor cannot satisfy are true capability_rejected.
         if primitives_used(skill_yaml) - ENGINE_18:
             return Outcome("beyond_engine", msg)
+        if "capability_absent" in msg:
+            return Outcome("capability_rejected", msg)
         return Outcome("malformed", msg)
