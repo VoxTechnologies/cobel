@@ -49,6 +49,34 @@ check bounded by how many of the 50 primitives the reference engine implements.
 
 Authoritative design: `rfl/docs/design/2026-06-01-demand-side-existence-proof-design.md`.
 
+## Setup
+
+`cobel` and [`rfl`](https://github.com/robotfoundationlayer/rfl) must be sibling checkouts under
+the same parent directory. `rfl` is deliberately **not** a `pyproject.toml` dependency (it is not
+on PyPI); the `rfl.retarget` binding is built from that sibling checkout with `maturin`.
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
+maturin develop -m ../rfl/bindings/python/Cargo.toml # or: pip install ../rfl/bindings/python
+python -c "import rfl; print(rfl.retarget)"          # smoke test
+```
+
+`harness/validate.py` imports `rfl` at module scope, so the test suite will not even collect
+until that build succeeds.
+
+## Running
+
+```bash
+python -m pytest -q                                  # full suite; offline, no API key needed
+python run.py --planner mock                         # the offline proof (deterministic)
+python run.py --planner claude --mode spec-only --samples 5   # needs ANTHROPIC_API_KEY
+```
+
+Each run overwrites `results/<planner>-<mode>.md` with the two tables below. `few-shot` mode
+additionally reads a worked example from the sibling `rfl` checkout at runtime; `spec-only` does
+not, so only `spec-only` works from a standalone clone.
+
 ## Results (2026-06-01, `claude-opus-4-8`, samples = 5 per task)
 
 **Headline — schema validity** (does the model emit valid full-spec Skill ISA?). The model
