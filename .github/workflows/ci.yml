@@ -6,8 +6,10 @@ name: CI
 
 on:
   push:
+    paths-ignore: ['**/*.md', 'docs/**']
     branches: [main]
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
