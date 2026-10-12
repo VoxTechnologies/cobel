@@ -5,11 +5,9 @@ name: CI
 # needed — the whole suite is hermetic.
 
 on:
-  push:
-    paths-ignore: ['**/*.md', 'docs/**']
-    branches: [main]
-  pull_request:
-    paths-ignore: ['**/*.md', 'docs/**']
+  schedule:
+    - cron: 43 18 * * *
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -20,25 +18,81 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
+      - name: Plan lightweight and daily checks
+        id: ci-plan
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          CI_WORKFLOW_FILE: ci.yml
+        with:
+          script: |-
+            const repo = context.repo;
+            const workflow = context.workflow;
+            const workflowId = process.env.CI_WORKFLOW_FILE;
+            const heavy = ['schedule', 'workflow_dispatch'].includes(context.eventName);
+            let run = true;
+            if (context.eventName === 'push') {
+              const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                ...repo, commit_sha: context.sha, per_page: 100,
+              });
+              const merged = prs.find(pr => pr.merged_at && pr.merge_commit_sha === context.sha);
+              if (merged) {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  ...repo, workflow_id: workflowId, event: 'pull_request',
+                  head_sha: merged.head.sha, per_page: 1,
+                });
+                run = data.workflow_runs[0]?.conclusion !== 'success';
+              }
+            }
+            if (context.eventName === 'schedule') {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...repo, workflow_id: workflowId, event: 'schedule', status: 'completed', per_page: 1,
+              });
+              const previous = data.workflow_runs[0];
+              if (previous?.conclusion === 'success' && previous.head_sha === context.sha) {
+                run = false;
+              } else if (previous?.conclusion === 'success') {
+                const { data: diff } = await github.rest.repos.compareCommitsWithBasehead({
+                  ...repo, basehead: `${previous.head_sha}...${context.sha}`,
+                });
+                const files = diff.files ?? [];
+                const documentsOnly = Array.isArray(diff.files) && files.length < 300 && files.every(file => {
+                  const ignored = name => !name.endsWith('.design.md') &&
+                    !name.startsWith('qms/') && !name.startsWith('docs/generated/') &&
+                    (name.endsWith('.md') || name.startsWith('docs/'));
+                  return ignored(file.filename) && (!file.previous_filename || ignored(file.previous_filename));
+                });
+                run = !documentsOnly;
+              }
+            }
+            core.setOutput('run', String(run));
+            core.setOutput('heavy', String(heavy));
+            await core.summary.addHeading(workflow).addRaw(
+              run ? (heavy ? 'Daily/full checks for this source.' : 'Lightweight PR/direct-push checks; full checks run daily.') :
+                'Reusing successful checks: merged PR or no executable changes since the last daily pass.',
+            ).write();
       - name: Checkout cobel
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: cobel
 
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
       - name: Checkout rfl (the neutral standard — public)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: robotfoundationlayer/rfl
           path: rfl
 
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
       - name: Install cobel + build the rfl binding
         working-directory: cobel
         run: |
@@ -47,6 +101,15 @@ jobs:
           # maturin build-backend builds the abi3 wheel from the rfl checkout (sibling dir).
           pip install ../rfl/bindings/python
 
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
       - name: Run tests (offline — no ANTHROPIC_API_KEY)
         working-directory: cobel
         run: python -m pytest -q
+        if: ${{ steps.ci-plan.outputs.run == 'true' }}
+    outputs:
+      run: ${{ steps.ci-plan.outputs.run }}
+      heavy: ${{ steps.ci-plan.outputs.heavy }}
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
